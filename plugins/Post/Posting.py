@@ -112,42 +112,30 @@ async def send_post(client, message: Message):
     await processing_msg.edit_text(result_msg, reply_markup=reply_markup)
 
 
-async def schedule_deletion(client, channel_id, message_id, delay_seconds, user_id, post_id, channel_name, confirmation_msg_id):
+async def schedule_deletion(client, channels, sent_messages, delay_seconds, user_id, post_id):
     """Schedule a message for deletion after a delay"""
     await asyncio.sleep(delay_seconds)
-    
-    try:
-        # First delete the original post from channel
-        await client.delete_messages(
-            chat_id=channel_id,
-            message_ids=message_id
-        )
-        
-        # Then delete the initial confirmation message
-        try:
-            await client.delete_messages(
-                chat_id=user_id,
-                message_ids=confirmation_msg_id
-            )
-        except Exception as e:
-            print(f"Couldn't delete confirmation message: {e}")
 
-        # Send new deletion confirmation
+    failed_channels = []
+    
+    for msg in sent_messages:
+        try:
+            await client.delete_messages(chat_id=msg["channel_id"], message_ids=msg["message_id"])
+        except Exception as e:
+            failed_channels.append(msg["channel_name"])
+
+    try:
+        # Send a single confirmation message
         confirmation_msg = (
-            f"🗑 <b>Post Auto-Deleted</b>\n\n"
+            f"🗑 <b>Auto Post Deleted</b>\n\n"
             f"• <b>Post ID:</b> <code>{post_id}</code>\n"
-            f"• <b>Duration:</b> {format_time(delay_seconds)}"
+            f"• <b>Deleted in:</b> {len(sent_messages) - len(failed_channels)} channels\n"
         )
+
+        if failed_channels:
+            confirmation_msg += f"• <b>Failed:</b> {len(failed_channels)} channels\n"
+
         await client.send_message(user_id, confirmation_msg)
         
     except Exception as e:
-        error_msg = (
-            f"❌ <b>Failed to Auto-Delete</b>\n\n"
-            f"• <b>Post ID:</b> <code>{post_id}</code>\n"
-            f"• <b>Channel:</b> {channel_name}\n"
-            f"• <b>Error:</b> {str(e)}"
-        )
-        try:
-            await client.send_message(user_id, error_msg)
-        except:
-            pass
+        print(f"Error sending confirmation: {e}")
