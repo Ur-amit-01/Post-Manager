@@ -1,6 +1,6 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
-from database.db import db  # Database 
+from plugins.helper.db import db  # Database 
 import time
 import random
 import asyncio
