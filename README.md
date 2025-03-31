@@ -1,7 +1,7 @@
 
 
 <h1 align="center">
- <b><a href="https://telegram.me/LazyDeveloper" target="/blank"> Gangster Baby ( Advance BOT ) </a></>
+ <b><a href="https://telegram.me/LazyDeveloper" target="/blank"> TG Post Manager ( Advance BOT ) </a></>
 </h1>
 
 <p align="center">🤍 Thanks for Being Here 🤍</p>
