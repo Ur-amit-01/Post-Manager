@@ -72,14 +72,12 @@ async def send_post(client, message: Message):
             if delete_after:
                 asyncio.create_task(
                     schedule_deletion(
-                        client,
-                        channel["_id"],
-                        sent_message.id,
-                        delete_after,
-                        message.from_user.id,
-                        post_id,
-                        channel.get("name", str(channel["_id"])),
-                        processing_msg.id  # Pass confirmation message ID to delete later
+                        client=client,
+                        channels_data=sent_messages,
+                        delay_seconds=delete_after,
+                        user_id=message.from_user.id,
+                        post_id=post_id,
+                        processing_msg_id=processing_msg.id
                     )
                 )
                 
@@ -94,7 +92,7 @@ async def send_post(client, message: Message):
     result_msg = (
         f"📣 <b>Posting Completed!</b>\n\n"
         f"• <b>Post ID:</b> <code>{post_id}</code>\n"
-        f"• <b>Success:</b> {success_count}/{total_channels} channels\n"
+        f"• <b>Success: {success_count}/{total_channels} channels </b>\n"
     )
     if delete_after:
         time_str = format_time(delete_after)
@@ -112,30 +110,49 @@ async def send_post(client, message: Message):
     await processing_msg.edit_text(result_msg, reply_markup=reply_markup)
 
 
-async def schedule_deletion(client, channels, sent_messages, delay_seconds, user_id, post_id):
-    """Schedule a message for deletion after a delay"""
+async def schedule_deletion(client, channels_data, delay_seconds, user_id, post_id, processing_msg_id=None):
+    """Schedule messages for deletion and send consolidated reports"""
     await asyncio.sleep(delay_seconds)
-
+    
+    success_count = 0
     failed_channels = []
     
-    for msg in sent_messages:
+    # Delete all messages and track results
+    for channel in channels_data:
         try:
-            await client.delete_messages(chat_id=msg["channel_id"], message_ids=msg["message_id"])
+            await client.delete_messages(
+                chat_id=channel["channel_id"],
+                message_ids=channel["message_id"]
+            )
+            success_count += 1
         except Exception as e:
-            failed_channels.append(msg["channel_name"])
-
-    try:
-        # Send a single confirmation message
+            failed_channels.append({
+                "name": channel["channel_name"],
+                "error": str(e)
+            })
+    
+    # Send single success confirmation if any succeeded
+    if success_count > 0:
         confirmation_msg = (
             f"🗑 <b>Auto Post Deleted</b>\n\n"
             f"• <b>Post ID:</b> <code>{post_id}</code>\n"
-            f"• <b>Deleted in:</b> {len(sent_messages) - len(failed_channels)} channels\n"
+            f"• <b>Successfully deleted from {success_count} channels</b>\n"
         )
-
-        if failed_channels:
-            confirmation_msg += f"• <b>Failed:</b> {len(failed_channels)} channels\n"
-
         await client.send_message(user_id, confirmation_msg)
-        
-    except Exception as e:
-        print(f"Error sending confirmation: {e}")
+    
+    # Send individual error messages for failures
+    for failed in failed_channels:
+        error_msg = (
+            f"❌ <b>Deletion Failed</b>\n\n"
+            f"• <b>Post ID:</b> <code>{post_id}</code>\n"
+            f"• <b>Channel:</b> {failed['name']}\n"
+            f"• <b>Error:</b> {failed['error']}\n"
+        )
+        await client.send_message(user_id, error_msg)
+    
+    # Delete processing message if available
+    if processing_msg_id:
+        try:
+            await client.delete_messages(user_id, processing_msg_id)
+        except:
+            pass
