@@ -136,67 +136,81 @@ async def schedule_deletion(client, channel_id, message_id, delay_seconds, user_
             message_ids=message_id
         )
         
-        # Return success status
+        # Return success status with all needed info
         return {
             "status": "success",
             "channel_name": channel_name,
-            "post_id": post_id
+            "post_id": post_id,
+            "user_id": user_id,  # Make sure to include this
+            "confirmation_msg_id": confirmation_msg_id  # And this
         }
         
     except Exception as e:
-        # Return failure status
+        # Return failure status with all needed info
         return {
             "status": "failed",
             "channel_name": channel_name,
             "post_id": post_id,
-            "error": str(e)
+            "error": str(e),
+            "user_id": user_id,  # Make sure to include this
+            "confirmation_msg_id": confirmation_msg_id  # And this
         }
 
 
 async def handle_deletion_results(client, deletion_tasks, post_id, delay_seconds):
     """Handle the results of all deletion tasks and send a single consolidated message"""
-    results = await asyncio.gather(*deletion_tasks, return_exceptions=True)
-    
-    success_count = 0
-    failed_count = 0
-    first_user_id = None
-    first_confirmation_msg_id = None
-    
-    for result in results:
-        if isinstance(result, Exception):
-            failed_count += 1
-            continue
-            
-        if result.get("status") == "success":
-            success_count += 1
-        else:
-            failed_count += 1
+    try:
+        results = await asyncio.gather(*deletion_tasks, return_exceptions=True)
         
-        # Get user_id and confirmation_msg_id from the first result
-        if first_user_id is None:
-            first_user_id = result.get("user_id")
-            first_confirmation_msg_id = result.get("confirmation_msg_id")
-    
-    # Delete the original confirmation message if any task succeeded
-    if success_count > 0 and first_confirmation_msg_id:
-        try:
-            await client.delete_messages(
-                chat_id=first_user_id,
-                message_ids=first_confirmation_msg_id
+        success_count = 0
+        failed_count = 0
+        user_id = None
+        confirmation_msg_id = None
+        
+        for result in results:
+            if isinstance(result, Exception):
+                failed_count += 1
+                continue
+                
+            # Set user_id and confirmation_msg_id from the first valid result
+            if user_id is None and result.get("user_id"):
+                user_id = result["user_id"]
+                confirmation_msg_id = result.get("confirmation_msg_id")
+            
+            if result.get("status") == "success":
+                success_count += 1
+            else:
+                failed_count += 1
+        
+        # Only proceed if we have a user_id to send to
+        if user_id:
+            # Delete the original confirmation message if any task succeeded
+            if success_count > 0 and confirmation_msg_id:
+                try:
+                    await client.delete_messages(
+                        chat_id=user_id,
+                        message_ids=confirmation_msg_id
+                    )
+                except Exception as e:
+                    print(f"Error deleting confirmation message: {e}")
+            
+            # Prepare the consolidated message
+            message_text = (
+                f"🗑 <b>Post Auto-Deleted</b>\n\n"
+                f"• <b>Post ID:</b> <code>{post_id}</code>\n"
+                f"• <b>Duration:</b> {format_time(delay_seconds)}\n"
+                f"• <b>Deleted from:</b> {success_count} channel(s)\n"
             )
-        except:
-            pass
-    
-    # Prepare the consolidated message
-    message_text = (
-        f"🗑 <b>Post Auto-Deleted</b>\n\n"
-        f"• <b>Post ID:</b> <code>{post_id}</code>\n"
-        f"• <b>Duration:</b> {format_time(delay_seconds)}\n"
-        f"• <b>Deleted from:</b> {success_count} channel(s)\n"
-    )
-    
-    if failed_count > 0:
-        message_text += f"• <b>Failed to delete from:</b> {failed_count} channel(s)\n"
-    
-    if first_user_id:
-        await client.send_message(first_user_id, message_text)
+            
+            if failed_count > 0:
+                message_text += f"• <b>Failed to delete from:</b> {failed_count} channel(s)\n"
+            
+            try:
+                await client.send_message(user_id, message_text)
+            except Exception as e:
+                print(f"Error sending deletion confirmation: {e}")
+        else:
+            print("No user_id found in deletion results")
+            
+    except Exception as e:
+        print(f"Error in handle_deletion_results: {e}")
