@@ -198,8 +198,8 @@ async def handle_deletion_results(client, deletion_tasks, post_id, delay_seconds
             message_text = (
                 f"🗑 <b>Post Auto-Deleted</b>\n\n"
                 f"• <b>Post ID:</b> <code>{post_id}</code>\n"
-                f"• <b>Duration:</b> {format_time(delay_seconds)}\n"
-                f"• <b>Deleted from:</b> {success_count} channel(s)\n"
+                f"• <b>Duration: {format_time(delay_seconds)}</b>\n"
+                f"• <b>Deleted from: {success_count} channel</b>\n"
             )
             
             if failed_count > 0:
