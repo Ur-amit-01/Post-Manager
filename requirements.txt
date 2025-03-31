@@ -1,0 +1,17 @@
+
+requests
+pymupdf==1.18.19
+PyPDF2==2.10.0
+pyrofork
+aiofiles
+Pillow
+humanize
+hachoir
+motor
+pyrogram==2.0.106
+TgCrypto
+dnspython
+aiohttp
+pikepdf
+pytz
+pyromod
