@@ -7,36 +7,6 @@ import asyncio
 from datetime import datetime, timedelta
 from config import *
 
-# Command to start the bot (public command)
-@Client.on_message(filters.private & filters.command("start"))
-async def start(client, message: Message):
-    try:
-        await message.react(emoji=random.choice(REACTIONS), big=True)  # React with a random emoji
-    except:
-        pass
-
-    # Add user to the database if they don't exist
-    if not await db.is_user_exist(message.from_user.id):
-        await db.add_user(message.from_user.id)
-        total_users = await db.total_users_count()
-        await client.send_message(LOG_CHANNEL, LOG_TEXT.format(message.from_user.mention, message.from_user.id, total_users))
-
-    # Welcome message
-    txt = (
-        f"> **✨👋🏻 Hey {message.from_user.mention} !!**\n"
-        f"**Welcome to the Channel Manager Bot, Manage multiple channels and post messages with ease! 😌**\n\n"
-        f"> **ᴅᴇᴠᴇʟᴏᴘᴇʀ 🧑🏻‍💻 :- @Axa_bachha**"
-    )
-    button = InlineKeyboardMarkup([
-        [InlineKeyboardButton('📜 ᴀʙᴏᴜᴛ', callback_data='about'), InlineKeyboardButton('🕵🏻‍♀️ ʜᴇʟᴘ', callback_data='help')]
-    ])
-
-    # Send the start message with or without a picture
-    if START_PIC:
-        await message.reply_photo(START_PIC, caption=txt, reply_markup=button)
-    else:
-        await message.reply_text(text=txt, reply_markup=button, disable_web_page_preview=True)
-
 # Command to add the current channel to the database
 @Client.on_message(filters.command("add") & filters.channel)
 async def add_current_channel(client, message: Message):
