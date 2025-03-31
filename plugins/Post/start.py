@@ -1,7 +1,7 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from config import *
-from database.db import db
+from plugins.helper.db import db
 import random
 
 @Client.on_message(filters.private & filters.command("start"))
