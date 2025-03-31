@@ -60,23 +60,24 @@ async def send_post(client, message: Message):
                 "channel_name": channel.get("name", str(channel["_id"]))
             })
             success_count += 1
-
-            if delete_after:
-                asyncio.create_task(
-                    auto_delete_post(
-                        client=client,
-                        post_id=post_id,
-                        delay_seconds=delete_after,
-                        processing_msg_id=processing_msg.id,
-                        user_id=message.from_user.id
-                    )
-                )
                 
         except Exception as e:
             print(f"Error posting to channel {channel['_id']}: {e}")
 
     if sent_messages:
         await db.save_post(post_id, sent_messages)
+        
+        # Schedule auto-deletion for ALL messages at once if time was specified
+        if delete_after:
+            asyncio.create_task(
+                schedule_deletion(
+                    client=client,
+                    post_id=post_id,
+                    delay_seconds=delete_after,
+                    user_id=message.from_user.id,
+                    processing_msg_id=processing_msg.id
+                )
+            )
 
     result_msg = (
         f"📣 <b>Posting Completed!</b>\n\n"
@@ -97,15 +98,15 @@ async def send_post(client, message: Message):
     await processing_msg.edit_text(result_msg, reply_markup=reply_markup)
 
 
-async def auto_delete_post(client, post_id, delay_seconds, processing_msg_id, user_id):
-    """Handle automatic post deletion after delay"""
+async def schedule_deletion(client, post_id, delay_seconds, user_id, processing_msg_id):
+    """Handle scheduled deletion for all messages in a post"""
     await asyncio.sleep(delay_seconds)
     
     post = await db.get_post(post_id)
     if not post:
         return
 
-    # Delete messages from all channels (silently ignore errors)
+    # Delete all messages (silently ignore errors)
     for msg in post["messages"]:
         try:
             await client.delete_messages(
@@ -115,18 +116,19 @@ async def auto_delete_post(client, post_id, delay_seconds, processing_msg_id, us
         except Exception:
             pass
 
-    # Delete processing message if it exists
+    # Delete processing message if exists
     try:
         await client.delete_messages(user_id, processing_msg_id)
-    except:
+    except Exception:
         pass
 
-    # Send simple confirmation message
+    # Send confirmation (matches callback handler style)
     await client.send_message(
         user_id,
         f"🗑 <b>Auto Post Deleted</b>\n\n"
         f"• <b>Post ID:</b> <code>{post_id}</code>\n"
         f"• <b>Deleted from:</b> {len(post['messages'])} channels"
     )
+    
+    # Clean up database
     await db.delete_post(post_id)
-
