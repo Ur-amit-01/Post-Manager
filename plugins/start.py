@@ -27,3 +27,19 @@ async def start(client, message: Message):
         await message.reply_photo(START_PIC, caption=txt, reply_markup=button)
     else:
         await message.reply_text(text=txt, reply_markup=button, disable_web_page_preview=True)
+
+
+@Client.on_message(filters.command("id"))
+async def id_command(client: Client, message: Message):
+    if message.chat.title:
+        chat_title = message.chat.title
+    else:
+        chat_title = message.from_user.full_name
+
+    id_text = f"**Chat ID of** {chat_title} **is**\n`{message.chat.id}`"
+
+    await client.send_message(
+        chat_id=message.chat.id,
+        text=id_text,
+        reply_to_message_id=message.id,
+    )
