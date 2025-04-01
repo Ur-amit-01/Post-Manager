@@ -8,15 +8,8 @@ from pyrogram.types import (
     CallbackQuery
 )
 from datetime import datetime
-from database import db
+from plugins.helper.db import db
 from config import *
-
-app = Client(
-    "channel_manager",
-    api_id=API_ID,
-    api_hash=API_HASH,
-    bot_token=BOT_TOKEN
-)
 
 # ==================== BACKUP/RESTORE HANDLERS ====================
 
