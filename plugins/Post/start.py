@@ -3,6 +3,9 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from config import *
 from plugins.helper.db import db
 import random
+from plugins.Extra.wallpaper import get_random_wallpaper
+# =====================================================================================
+START_PIC = get_random_wallpaper()
 
 @Client.on_message(filters.private & filters.command("start"))
 async def start(client, message: Message):
