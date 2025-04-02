@@ -1,4 +1,5 @@
 import motor.motor_asyncio
+import time
 from config import DB_URL, DB_NAME
 
 class Database:
@@ -60,47 +61,90 @@ class Database:
         return [channel async for channel in self.channels.find({})]
 
     #============ Post System ============#
-    async def save_post(self, post_id, messages):
+    async def save_post(self, post_data):
         """
-        Save a post with a unique ID.
-        :param post_id: Unique ID for the post
-        :param messages: List of dictionaries containing channel_id and message_id
+        Save a post with all its data including deletion info
+        :param post_data: Dictionary containing all post information
         """
         try:
             await self.posts.update_one(
-                {"_id": post_id},
-                {"$set": {"messages": messages}},
+                {"post_id": post_data["post_id"]},
+                {"$set": post_data},
                 upsert=True
             )
+            return True
         except Exception as e:
             print(f"Error saving post: {e}")
+            return False
 
     async def get_post(self, post_id):
         """
-        Retrieve a post by its ID.
+        Retrieve complete post data by its ID
         :param post_id: Unique ID of the post
-        :return: List of dictionaries containing channel_id and message_id
         """
         try:
-            post = await self.posts.find_one({"_id": post_id})
-            return post.get("messages", []) if post else []
+            return await self.posts.find_one({"post_id": post_id})
         except Exception as e:
             print(f"Error retrieving post: {e}")
-            return []
+            return None
 
     async def delete_post(self, post_id):
         """
-        Delete a post by its ID.
+        Delete a post by its ID
         :param post_id: Unique ID of the post
         """
         try:
-            await self.posts.delete_one({"_id": post_id})
+            await self.posts.delete_one({"post_id": post_id})
+            return True
         except Exception as e:
             print(f"Error deleting post: {e}")
+            return False
+
+    async def get_pending_deletions(self):
+        """
+        Get all posts with pending deletions
+        :return: List of posts where delete_after > current time
+        """
+        try:
+            return await self.posts.find({
+                "delete_after": {"$gt": time.time()}
+            }).to_list(None)
+        except Exception as e:
+            print(f"Error getting pending deletions: {e}")
+            return []
+
+    async def remove_channel_post(self, post_id, channel_id):
+        """
+        Remove a specific channel from a post
+        :param post_id: ID of the post
+        :param channel_id: ID of the channel to remove
+        """
+        try:
+            result = await self.posts.update_one(
+                {"post_id": post_id},
+                {"$pull": {"channels": {"channel_id": channel_id}}}
+            )
+            return result.modified_count > 0
+        except Exception as e:
+            print(f"Error removing channel post: {e}")
+            return False
+
+    async def get_post_channels(self, post_id):
+        """
+        Get remaining channels for a post
+        :param post_id: ID of the post
+        :return: List of channels or empty list
+        """
+        try:
+            post = await self.posts.find_one({"post_id": post_id})
+            return post.get("channels", []) if post else []
+        except Exception as e:
+            print(f"Error getting post channels: {e}")
+            return []
 
     async def get_all_posts(self):
         """
-        Retrieve all posts.
+        Retrieve all posts
         :return: List of all posts
         """
         try:
