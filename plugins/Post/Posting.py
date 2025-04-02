@@ -159,7 +159,7 @@ async def send_post(client, message: Message):
     try:
         await client.send_message(
             chat_id=LOG_CHANNEL,
-            text=f"📢 <blockquote><b>#New_Post | @Interferons_bot</b></blockquote>\n\n"
+            text=f"📢 <blockquote><b>#Post | @Interferons_bot</b></blockquote>\n\n"
                  f"👤 <b>Posted By:</b> {message.from_user.mention}\n"
                  f"📌 <b>Post ID:</b> <code>{post_id}</code>\n"
                  f"📡 <b>Sent to:</b> {success_count}/{total_channels} channels\n"
