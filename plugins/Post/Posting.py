@@ -113,6 +113,19 @@ async def send_post(client, message: Message):
     # Edit the processing message with final result and delete button
     await processing_msg.edit_text(result_msg, reply_markup=reply_markup)
 
+    try:
+        await client.send_message(
+    	    chat_id=LOG_CHANNEL,
+  	        text=f"📢 <blockquote><b>#New_Post | @Interferons_bot</b></blockquote>\n\n"
+    	         f"👤 <b>Posted By:</b> {message.from_user.mention}\n"
+           	     f"📌 <b>Post ID:</b> <code>{post_id}</code>\n"
+                 f"📡 <b>Sent to:</b> {success_count}/{total_channels} channels\n"
+                 f"⏳ <b>Auto-delete:</b> {time_str if delete_after else 'No'}",
+ 	        reply_markup=reply_markup
+    )
+	except Exception as e:
+ 	    print(f"Error sending confirmation to log channel: {e}")
+
     # Start tracking deletions if scheduled
     if delete_after and deletion_tasks:
         asyncio.create_task(
