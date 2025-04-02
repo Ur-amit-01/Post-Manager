@@ -15,36 +15,79 @@ async def cb_handler(client: Client, query: CallbackQuery):
     data = query.data
 
     if data.startswith("delete_"):
-        # Extract post ID from callback data
-        post_id = int(data.split("_")[1])
-        
-        # Retrieve the post's details from the database
-        post = await db.get_post(post_id)
-
-        if not post:
-            await query.answer("❌ Post not found or already deleted", show_alert=True)
-            return
-
-        # Delete the messages from all channels
-        for msg in post:
-            try:
-                await client.delete_messages(
-                    chat_id=msg["channel_id"],  # Channel ID
-                    message_ids=msg["message_id"]  # Message ID
+        try:
+            await query.answer("Processing deletion...")
+            post_id = int(data.split("_")[1])
+            
+            # Retrieve the post's details from the database
+            post = await db.get_post(post_id)
+            
+            if not post:
+                await query.answer("❌ Post not found or already deleted", show_alert=True)
+                await query.message.edit_text(
+                    f"❌ <b>Deletion Failed</b>\n\n"
+                    f"• <b>Post ID:</b> <code>{post_id}</code>\n"
+                    f"• <b>Reason:</b> Post not found in database"
                 )
-            except Exception as e:
-                print(f"Error deleting message from channel {msg['channel_id']}: {e}")
+                return
 
-        # Delete the post from the database
-        await db.delete_post(post_id)
-        
-        # Edit the original message to show deletion confirmation
-        await query.message.edit_text(
-            f"🗑 <b>Post Deleted Successfully!</b>\n\n"
-            f"• <b>Post ID:</b> <code>{post_id}</code>\n"
-            f"• <b>Deleted from:</b> {len(post)} channels"
-        )
-        return
+            processing_msg = await query.message.edit_text(
+                f"🗑 <b>Deleting Post ID:</b> <code>{post_id}</code>\n\n"
+                f"• <b>Channels: {len(post.get('channels', []))}</b>\n"
+                f"⏳ <b><i>Processing deletion...</i></b>"
+            )
+
+            channels = post.get("channels", [])
+            success_count = 0
+            failed_count = 0
+            failed_channels = []
+
+            for channel in channels:
+                try:
+                    await client.delete_messages(
+                        chat_id=channel["channel_id"],
+                        message_ids=channel["message_id"]
+                    )
+                    success_count += 1
+                    # Remove from database after successful deletion
+                    await db.remove_channel_post(post_id, channel["channel_id"])
+                except Exception as e:
+                    failed_count += 1
+                    failed_channels.append(
+                        f"  - {channel.get('channel_name', channel['channel_id'])}: {str(e)}"
+                    )
+
+            # Check if all channels were deleted
+            remaining_channels = await db.get_post_channels(post_id)
+            if not remaining_channels:
+                await db.delete_post(post_id)
+
+            result_msg = (
+                f"🗑 <b>Post Deletion Results</b>\n\n"
+                f"• <b>Post ID:</b> <code>{post_id}</code>\n"
+                f"• <b>Successfully deleted from:</b> {success_count} channel(s)\n"
+            )
+            
+            if failed_count > 0:
+                result_msg += (
+                    f"• <b>Failed to delete from:</b> {failed_count} channel(s)\n"
+                    f"\n<b>Errors:</b>\n"
+                )
+                # Show up to 5 error messages to avoid too long messages
+                result_msg += "\n".join(failed_channels[:5])
+                if len(failed_channels) > 5:
+                    result_msg += f"\n  - (and {len(failed_channels)-5} more errors...)"
+
+            await processing_msg.edit_text(result_msg)
+
+        except Exception as e:
+            print(f"Error in callback deletion handler: {e}")
+            await query.answer("❌ An error occurred during deletion", show_alert=True)
+            await query.message.edit_text(
+                f"❌ <b>Deletion Failed</b>\n\n"
+                f"• <b>Error:</b> {str(e)}\n"
+                f"• Please try again or check logs"
+            )
     
     elif data == "start":
         txt = (
