@@ -123,8 +123,8 @@ async def send_post(client, message: Message):
                  f"⏳ <b>Auto-delete:</b> {time_str if delete_after else 'No'}",
  	    reply_markup=reply_markup
 	)    
-	except Exception as e:
- 	    print(f"Error sending confirmation to log channel: {e}")
+    except Exception as e:
+        print(f"Error sending confirmation to log channel: {e}")
 
     # Start tracking deletions if scheduled
     if delete_after and deletion_tasks:
