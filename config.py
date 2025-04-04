@@ -8,7 +8,7 @@ API_HASH = os.environ.get("API_HASH", "5b0e07f5a96d48b704eb9850d274fe1d")
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "7821967646:AAFHUS91204U6P6xqnBOdAefk42agRWzTc0") 
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 
-DB_NAME = os.environ.get("DB_NAME","SAT_manager")     
+DB_NAME = os.environ.get("DB_NAME","")     
 DB_URL = os.environ.get("DB_URL","mongodb+srv://uramit0001:EZ1u5bfKYZ52XeGT@cluster0.qnbzn.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
 
 ADMIN = [int(admin) if id_pattern.search(admin) else admin for admin in os.environ.get('ADMIN', '6803505727').split()]
