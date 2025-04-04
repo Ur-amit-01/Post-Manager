@@ -7,8 +7,12 @@ import asyncio
 from config import *
 
 # Command to add the current channel to the database
-@Client.on_message(filters.command("add") & filters.channel & filters.user(ADMIN))
+# Try changing the filters to be less restrictive for testing:
+@Client.on_message(filters.command("add"))
 async def add_current_channel(client, message: Message):
+    print(f"Command received from {message.from_user.id} in {message.chat.id}")
+    if message.chat.type != "channel" or message.from_user.id not in ADMIN:
+        return await message.reply("❌ Command only available in channels by my admins")
 
     channel_id = message.chat.id
     channel_name = message.chat.title
@@ -24,8 +28,11 @@ async def add_current_channel(client, message: Message):
         await message.reply("❌ Failed to add channel. Contact developer.")
 
 # Command to remove the current channel from the database
-@Client.on_message(filters.command("rem") & filters.channel & filters.user(ADMIN))
+@Client.on_message(filters.command("rem"))
 async def remove_current_channel(client, message: Message):
+    print(f"Command received from {message.from_user.id} in {message.chat.id}")
+    if message.chat.type != "channel" or message.from_user.id not in ADMIN:
+        return await message.reply("❌ Command only available in channels by my admins")
 
     channel_id = message.chat.id
     channel_name = message.chat.title
@@ -117,3 +124,65 @@ async def list_channels(client, message: Message):
     # Send the response (split if too long)
     full_response = "\n".join(response_parts)
     await message.reply(full_response[:4000])  # Telegram message limit
+
+@Client.on_message(filters.command("addchannels") & filters.private & filters.user(ADMIN))
+async def add_multiple_channels(client, message: Message):
+    try:
+        # Check if message is a reply to the channel list
+        if not message.reply_to_message or not message.reply_to_message.text:
+            return await message.reply("⚠️ Please reply to a message containing the channel list with this command!")
+        
+        # Extract text from replied message
+        text = message.reply_to_message.text
+        added_count = 0
+        skipped_count = 0
+        errors = []
+        
+        # Process each line
+        for line in text.split('\n'):
+            try:
+                # Skip header lines and empty lines
+                if not line.strip() or line.startswith("Total Channels") or line.startswith("📢"):
+                    continue
+                
+                # Extract channel ID and name
+                if ":-" in line:
+                    parts = line.split(":-")
+                    if len(parts) >= 2:
+                        channel_name = parts[0].replace("📢", "").strip()
+                        channel_id = parts[1].strip().replace("`", "")
+                        
+                        # Convert to integer (remove '-' if present in ID)
+                        try:
+                            channel_id = int(channel_id)
+                        except ValueError:
+                            continue
+                            
+                        # Add to database
+                        if not await db.is_channel_exist(channel_id):
+                            await db.add_channel(channel_id, channel_name)
+                            added_count += 1
+                        else:
+                            skipped_count += 1
+            except Exception as e:
+                errors.append(f"Error processing line: {line} - {str(e)}")
+                continue
+        
+        # Prepare response
+        response = (
+            f"**Channel Addition Summary**\n\n"
+            f"✅ Successfully added: {added_count}\n"
+            f"⏩ Already existed (skipped): {skipped_count}\n"
+        )
+        
+        if errors:
+            response += f"\n❌ Errors: {len(errors)}\n"
+            if len(errors) > 3:
+                response += "\n".join(errors[:3]) + "\n...(truncated)"
+            else:
+                response += "\n".join(errors)
+        
+        await message.reply(response)
+        
+    except Exception as e:
+        await message.reply(f"❌ Error processing channels: {str(e)}")
