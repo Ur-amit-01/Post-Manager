@@ -72,81 +72,24 @@ async def remove_current_channel(client, message: Message):
 @Client.on_message(filters.command("channels") & filters.private & filters.user(ADMIN))
 async def list_channels(client, message: Message):
     try:
-        await message.react(emoji=random.choice(REACTIONS), big=True)
+        await message.react(emoji=random.choice(REACTIONS), big=True)  # React with a random emoji
     except:
         pass
-
+    # Retrieve all channels from the database
     channels = await db.get_all_channels()
+
     if not channels:
         await message.reply("**No channels connected yet.🙁**")
         return
-
-    valid_channels = []
-    removed_channels = []
-    errors = []
-
-    for channel in channels:
-        channel_id = channel['_id']
-        channel_name = channel.get('name', 'Unknown')
-        
-        try:
-            # Try to get chat information
-            chat = await client.get_chat(channel_id)
-            
-            # Verify it's still a channel
-            if chat.type != "channel":
-                await db.delete_channel(channel_id)
-                removed_channels.append(f"{channel_name} (Not a channel)")
-                continue
-                
-            # Check bot's admin status
-            try:
-                member = await client.get_chat_member(channel_id, "me")
-                if not member.can_post_messages:
-                    await db.delete_channel(channel_id)
-                    removed_channels.append(f"{channel_name} (No posting rights)")
-                    continue
-                    
-                valid_channels.append(channel)
-                
-            except Exception as admin_error:
-                await db.delete_channel(channel_id)
-                removed_channels.append(f"{channel_name} (Admin check failed)")
-                errors.append(f"Admin check failed for {channel_id}: {admin_error}")
-
-        except Exception as e:
-            # Handle different types of errors more specifically
-            error_msg = str(e)
-            if "CHANNEL_INVALID" in error_msg or "CHANNEL_PRIVATE" in error_msg:
-                await db.delete_channel(channel_id)
-                removed_channels.append(f"{channel_name} (Invalid/Private)")
-            elif "USER_NOT_PARTICIPANT" in error_msg:
-                await db.delete_channel(channel_id)
-                removed_channels.append(f"{channel_name} (Bot removed)")
-            else:
-                errors.append(f"Unknown error for {channel_id}: {error_msg}")
-
-    # Prepare the response message
-    response_parts = []
+    total_channels = len(channels)
+    # Format the list of channels
+    channel_list = [f"📢 **{channel['name']}** :- `{channel['_id']}`" for channel in channels]
+    response = (
+        f"> **Total Channels :- ({total_channels})**\n\n"  # Add total count here
+        + "\n".join(channel_list)
+    )
+    await message.reply(response)
     
-    if removed_channels:
-        response_parts.append("**🚫 Removed Channels:**\n" + "\n".join(f"• {name}" for name in removed_channels))
-    
-    if errors:
-        response_parts.append("\n**⚠️ Errors:**\n" + "\n".join(f"• {e}" for e in errors[:5]))  # Show first 5 errors
-    
-    if valid_channels:
-        total = len(valid_channels)
-        channel_list = [f"📢 **{ch['name']}** (`{ch['_id']}`)" for ch in valid_channels]
-        response_parts.append(f"\n**✅ Valid Channels ({total}):**\n" + "\n".join(channel_list))
-    else:
-        response_parts.append("\n**No valid channels remaining.**")
-
-    # Send the response (split if too long)
-    full_response = "\n".join(response_parts)
-    await message.reply(full_response[:4000])  # Telegram message limit
-
-
 
 @Client.on_message(filters.command("addchannels") & filters.private & filters.user(ADMIN))
 async def add_multiple_channels(client, message: Message):
