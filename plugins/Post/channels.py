@@ -7,115 +7,44 @@ import asyncio
 from config import *
 
 # Command to add the current channel to the database
-@Client.on_message(filters.command("add") & filters.private & filters.user(ADMIN))
-async def add_channels(client, message: Message):
-    """
-    Add one or more channels to the database
-    Usage: /add [-100...] [100...] [...]
-    Examples:
-    /add -10012345678
-    /add 10012345678 10023456789
-    """
-    # Check if channel IDs were provided
-    if len(message.command) < 2:
-        return await message.reply(
-            "❌ Please provide channel IDs separated by spaces\n"
-            "Examples:\n"
-            "• `/add -10012345678`\n"
-            "• `/add 10012345678 10023456789`"
-        )
+@Client.on_message(filters.command("add") & filters.private)
+async def add_channels_via_dm(client, message: Message):
+    if not message.from_user or message.from_user.id not in ADMIN:
+        return await message.reply("❌ You are not authorized to use this command!")
 
-    processing_msg = await message.reply("⏳ Processing channel IDs...")
+    args = message.text.split()[1:]  # Extract arguments after /add
+    if not args:
+        return await message.reply("❌ Please provide at least one channel username or ID. Example:\n`/add @channel1 @channel2`", quote=True)
+
     added_channels = []
-    existing_channels = []
-    invalid_channels = []
-    failed_channels = []
+    already_exists = []
+    failed = []
 
-    for channel_input in message.command[1:]:  # Skip the "/add" part
+    for ch in args:
         try:
-            # Convert to proper channel ID format
-            channel_id = int(channel_input)
-            if channel_id > 0:  # Convert positive to negative
-                channel_id = -abs(channel_id)
-            
-            # Validate channel ID range
-            if not (-1000000000000 < channel_id < -1):
-                invalid_channels.append(channel_input)
-                continue
+            chat = await client.get_chat(ch)
+            channel_id = chat.id
+            channel_name = chat.title
 
-            # Try to get channel info (verifies existence and access)
-            try:
-                chat = await client.get_chat(channel_id)
-                channel_name = chat.title
-                
-                # Check if bot has admin rights
-                try:
-                    bot_member = await client.get_chat_member(channel_id, "me")
-                    if not (bot_member.can_post_messages or bot_member.status == "administrator"):
-                        failed_channels.append(f"{channel_id} (No admin rights)")
-                        continue
-                except Exception:
-                    failed_channels.append(f"{channel_id} (Access denied)")
-                    continue
+            if await db.add_channel(channel_id, channel_name):
+                added_channels.append(channel_name)
+            else:
+                already_exists.append(channel_name)
+        except Exception as e:
+            print(f"Failed to add {ch}: {e}")
+            failed.append(ch)
 
-                # Add to database
-                if await db.add_channel(channel_id, channel_name):
-                    added_channels.append(f"{channel_name} (`{channel_id}`)")
-                else:
-                    existing_channels.append(f"{channel_name} (`{channel_id}`)")
-                    
-            except Exception as e:
-                failed_channels.append(f"{channel_id} (Error: {str(e)})")
-                continue
-                
-        except ValueError:
-            invalid_channels.append(channel_input)
-
-    # Prepare response message
-    response = ["**Channel Addition Results**"]
-    
+    # Create response
+    response = ""
     if added_channels:
-        response.append("\n✅ **Successfully Added:**")
-        response.extend(f"• {ch}" for ch in added_channels[:10])  # Show first 10
-        if len(added_channels) > 10:
-            response.append(f"• ...and {len(added_channels)-10} more")
+        response += "**✅ Added Channels:**\n" + "\n".join(added_channels) + "\n\n"
+    if already_exists:
+        response += "**ℹ️ Already Exists:**\n" + "\n".join(already_exists) + "\n\n"
+    if failed:
+        response += "**❌ Failed to Add:**\n" + "\n".join(failed)
 
-    if existing_channels:
-        response.append("\nℹ️ **Already Existed:**")
-        response.extend(f"• {ch}" for ch in existing_channels[:5])
-        if len(existing_channels) > 5:
-            response.append(f"• ...and {len(existing_channels)-5} more")
-
-    if invalid_channels:
-        response.append("\n❌ **Invalid IDs:**")
-        response.append(", ".join(invalid_channels[:10]))
-        if len(invalid_channels) > 10:
-            response.append(f"(+ {len(invalid_channels)-10} more)")
-
-    if failed_channels:
-        response.append("\n⚠️ **Failed to Add:**")
-        response.extend(f"• {ch}" for ch in failed_channels[:5])
-        if len(failed_channels) > 5:
-            response.append(f"• ...and {len(failed_channels)-5} more")
-
-    if not (added_channels or existing_channels or invalid_channels or failed_channels):
-        response.append("\nNo valid channel IDs were processed")
-
-    # Edit original processing message
-    full_response = "\n".join(response)
-    await processing_msg.edit_text(
-        text=full_response[:4000],  # Telegram message limit
-        disable_web_page_preview=True
-    )
-
-    # Log summary to console
-    print(
-        f"Channel add results:\n"
-        f"Added: {len(added_channels)}\n"
-        f"Existing: {len(existing_channels)}\n"
-        f"Invalid: {len(invalid_channels)}\n"
-        f"Failed: {len(failed_channels)}"
-    )
+    await message.reply(response or "No channels processed.")
+    
 
 @Client.on_message(filters.command("rem") & filters.private & filters.user(ADMIN))
 async def remove_channels(client, message: Message):
