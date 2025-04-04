@@ -7,12 +7,27 @@ import asyncio
 from config import *
 
 # Command to add the current channel to the database
-# Try changing the filters to be less restrictive for testing:
 @Client.on_message(filters.command("add"))
 async def add_current_channel(client, message: Message):
-    print(f"Command received from {message.from_user.id} in {message.chat.id}")
-    if message.chat.type != "channel" or message.from_user.id not in ADMIN:
-        return await message.reply("❌ Command only available in channels by my admins")
+    # Debug info
+    print(f"Add command received from {message.from_user.id} in chat {message.chat.id}")
+    print(f"ADMIN list: {ADMIN}")
+    
+    # Check if in channel and sender is admin
+    if message.chat.type != "channel":
+        return await message.reply("❌ This command only works in channels!")
+    
+    if message.from_user.id not in ADMIN:
+        return await message.reply("❌ You need to be bot admin to use this command!")
+    
+    # Check if bot is admin in channel
+    try:
+        bot_member = await client.get_chat_member(message.chat.id, "me")
+        if not bot_member.can_post_messages:
+            return await message.reply("❌ I need admin rights with post permissions in this channel!")
+    except Exception as e:
+        print(f"Admin check error: {e}")
+        return await message.reply("❌ Failed to check my admin status in this channel!")
 
     channel_id = message.chat.id
     channel_name = message.chat.title
@@ -25,14 +40,19 @@ async def add_current_channel(client, message: Message):
             await message.reply(f"ℹ️ Channel '{channel_name}' already exists.")
     except Exception as e:
         print(f"Error adding channel: {e}")
-        await message.reply("❌ Failed to add channel. Contact developer.")
+        await message.reply("❌ Database error. Contact developer.")
 
-# Command to remove the current channel from the database
 @Client.on_message(filters.command("rem"))
 async def remove_current_channel(client, message: Message):
-    print(f"Command received from {message.from_user.id} in {message.chat.id}")
-    if message.chat.type != "channel" or message.from_user.id not in ADMIN:
-        return await message.reply("❌ Command only available in channels by my admins")
+    # Debug info
+    print(f"Remove command received from {message.from_user.id} in chat {message.chat.id}")
+    
+    # Check if in channel and sender is admin
+    if message.chat.type != "channel":
+        return await message.reply("❌ This command only works in channels!")
+    
+    if message.from_user.id not in ADMIN:
+        return await message.reply("❌ You need to be bot admin to use this command!")
 
     channel_id = message.chat.id
     channel_name = message.chat.title
@@ -40,12 +60,13 @@ async def remove_current_channel(client, message: Message):
     try:
         if await db.is_channel_exist(channel_id):
             await db.delete_channel(channel_id)
-            await message.reply(f"**Channel '{channel_name}' removed from my database!**")
+            await message.reply(f"**Channel '{channel_name}' removed!**")
         else:
-            await message.reply(f"ℹ️ Channel '{channel_name}' not found.")
+            await message.reply(f"ℹ️ Channel '{channel_name}' not found in database.")
     except Exception as e:
         print(f"Error removing channel: {e}")
-        await message.reply("❌ Failed to remove channel. Try again.")
+        await message.reply("❌ Database error. Try again later.")
+
 
 # Command to list all connected channels
 @Client.on_message(filters.command("channels") & filters.private & filters.user(ADMIN))
@@ -125,64 +146,44 @@ async def list_channels(client, message: Message):
     full_response = "\n".join(response_parts)
     await message.reply(full_response[:4000])  # Telegram message limit
 
+
+
 @Client.on_message(filters.command("addchannels") & filters.private & filters.user(ADMIN))
 async def add_multiple_channels(client, message: Message):
-    try:
-        # Check if message is a reply to the channel list
-        if not message.reply_to_message or not message.reply_to_message.text:
-            return await message.reply("⚠️ Please reply to a message containing the channel list with this command!")
+    # Check if message is a reply
+    if not message.reply_to_message or not message.reply_to_message.text:
+        return await message.reply("⚠️ Please reply to a message containing channel IDs (one per line) with this command!")
+    
+    # Get the text from replied message
+    text = message.reply_to_message.text
+    added = 0
+    skipped = 0
+    
+    # Process each line
+    for line in text.split('\n'):
+        line = line.strip()
+        if not line:  # Skip empty lines
+            continue
         
-        # Extract text from replied message
-        text = message.reply_to_message.text
-        added_count = 0
-        skipped_count = 0
-        errors = []
+        # Extract channel ID (handle both -100 and 100 formats)
+        channel_id = line.replace('-', '').strip()
+        if not channel_id.isdigit():
+            continue
+            
+        channel_id = int(channel_id)
+        if channel_id > 0:  # Make sure it's negative for channels
+            channel_id = -channel_id
         
-        # Process each line
-        for line in text.split('\n'):
-            try:
-                # Skip header lines and empty lines
-                if not line.strip() or line.startswith("Total Channels") or line.startswith("📢"):
-                    continue
-                
-                # Extract channel ID and name
-                if ":-" in line:
-                    parts = line.split(":-")
-                    if len(parts) >= 2:
-                        channel_name = parts[0].replace("📢", "").strip()
-                        channel_id = parts[1].strip().replace("`", "")
-                        
-                        # Convert to integer (remove '-' if present in ID)
-                        try:
-                            channel_id = int(channel_id)
-                        except ValueError:
-                            continue
-                            
-                        # Add to database
-                        if not await db.is_channel_exist(channel_id):
-                            await db.add_channel(channel_id, channel_name)
-                            added_count += 1
-                        else:
-                            skipped_count += 1
-            except Exception as e:
-                errors.append(f"Error processing line: {line} - {str(e)}")
-                continue
-        
-        # Prepare response
-        response = (
-            f"**Channel Addition Summary**\n\n"
-            f"✅ Successfully added: {added_count}\n"
-            f"⏩ Already existed (skipped): {skipped_count}\n"
-        )
-        
-        if errors:
-            response += f"\n❌ Errors: {len(errors)}\n"
-            if len(errors) > 3:
-                response += "\n".join(errors[:3]) + "\n...(truncated)"
-            else:
-                response += "\n".join(errors)
-        
-        await message.reply(response)
-        
-    except Exception as e:
-        await message.reply(f"❌ Error processing channels: {str(e)}")
+        # Add to database
+        if not await db.is_channel_exist(channel_id):
+            await db.add_channel(channel_id, f"Channel {abs(channel_id)}")
+            added += 1
+        else:
+            skipped += 1
+    
+    # Send result
+    await message.reply(
+        f"**Channels added successfully!**\n\n"
+        f"✅ Added: {added}\n"
+        f"⏩ Skipped (already exists): {skipped}"
+    )
