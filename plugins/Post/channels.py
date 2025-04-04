@@ -7,7 +7,7 @@ import asyncio
 from config import *
 
 # Command to add the current channel to the database
-@Client.on_message(filters.command("add") & filters.channel)
+@Client.on_message(filters.command("add") & filters.channel & filters.user(ADMIN))
 async def add_current_channel(client, message: Message):
 
     channel_id = message.chat.id
@@ -24,7 +24,7 @@ async def add_current_channel(client, message: Message):
         await message.reply("❌ Failed to add channel. Contact developer.")
 
 # Command to remove the current channel from the database
-@Client.on_message(filters.command("rem") & filters.channel)
+@Client.on_message(filters.command("rem") & filters.channel & filters.user(ADMIN))
 async def remove_current_channel(client, message: Message):
 
     channel_id = message.chat.id
