@@ -44,11 +44,10 @@ async def remove_current_channel(client, message: Message):
 @Client.on_message(filters.command("channels") & filters.private & filters.user(ADMIN))
 async def list_channels(client, message: Message):
     try:
-        await message.react(emoji=random.choice(REACTIONS), big=True)  # React with a random emoji
+        await message.react(emoji=random.choice(REACTIONS), big=True)
     except:
         pass
 
-    # Retrieve all channels from the database
     channels = await db.get_all_channels()
 
     if not channels:
@@ -56,12 +55,20 @@ async def list_channels(client, message: Message):
         return
 
     total_channels = len(channels)
-
-    # Format the list of channels
     channel_list = [f"• **{channel['name']}** :- `{channel['_id']}`" for channel in channels]
-    response = (
-        f"> **Total Channels :- ({total_channels})**\n\n"  # Add total count here
-        + "\n".join(channel_list)
-    )
 
-    await message.reply(response)
+    header = f"> **Total Channels :- ({total_channels})**\n\n"
+    messages = []
+    current_message = header
+
+    for line in channel_list:
+        if len(current_message) + len(line) + 1 > 4096:
+            messages.append(current_message)
+            current_message = ""
+        current_message += line + "\n"
+
+    if current_message:
+        messages.append(current_message)
+
+    for part in messages:
+        await message.reply(part)
