@@ -1,25 +1,98 @@
-from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message, CallbackQuery
-from datetime import datetime, time as dt_time, timedelta
 import asyncio
 import time
+import re
+from datetime import datetime, time as dt_time, timedelta
+from pyrogram import Client, filters
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message, CallbackQuery
 from config import ADMIN
 from plugins.helper.db import db
 
-# Database Structure:
-"""
-DailyPosts {
-    _id: str,
-    user_id: int,
-    content: {message_id: int, chat_id: int},
-    schedule: {
-        post_time: str (HH:MM),
-        delete_after: int (seconds),
-        is_active: bool,
-        last_posted: int (timestamp)
-    }
-}
-"""
+# ========================
+# SCHEDULER FUNCTIONS
+# ========================
+
+async def schedule_daily_post(client, post_id):
+    """Schedule the daily posting job"""
+    post = await db.daily_posts.find_one({"_id": post_id})
+    if not post:
+        return
+
+    async def job():
+        post = await db.daily_posts.find_one({"_id": post_id})
+        if not post or not post["schedule"]["is_active"]:
+            return
+
+        # Get all channels
+        channels = await db.get_all_channels()
+        
+        for channel in channels:
+            try:
+                msg = await client.copy_message(
+                    chat_id=channel["_id"],
+                    from_chat_id=post["content"]["chat_id"],
+                    message_id=post["content"]["message_id"]
+                )
+                
+                if post["schedule"]["delete_after"] > 0:
+                    asyncio.create_task(
+                        delete_later(client, channel["_id"], msg.id, post["schedule"]["delete_after"])
+                    )
+                
+            except Exception as e:
+                print(f"Failed to post {post_id} to {channel['_id']}: {e}")
+
+        # Update last posted time
+        await db.daily_posts.update_one(
+            {"_id": post_id},
+            {"$set": {"schedule.last_posted": time.time()}}
+        )
+
+    # Schedule the job
+    hour, minute = map(int, post["schedule"]["post_time"].split(":"))
+    client.scheduler.add_job(
+        job,
+        "cron",
+        hour=hour,
+        minute=minute,
+        id=f"daily_{post_id}"
+    )
+
+async def delete_later(client, chat_id, message_id, delay_seconds):
+    """Helper for auto-deletion"""
+    await asyncio.sleep(delay_seconds)
+    try:
+        await client.delete_messages(chat_id, message_id)
+    except:
+        pass
+
+# ========================
+# UTILITY FUNCTIONS
+# ========================
+
+def parse_time_to_seconds(time_str: str) -> int:
+    """Convert time string to seconds"""
+    time_str = time_str.lower()
+    if "min" in time_str or "m" in time_str:
+        return int(re.sub(r"[^\d]", "", time_str)) * 60
+    elif "hour" in time_str or "hr" in time_str or "h" in time_str:
+        return int(re.sub(r"[^\d]", "", time_str)) * 3600
+    elif "day" in time_str or "d" in time_str:
+        return int(re.sub(r"[^\d]", "", time_str)) * 86400
+    return int(re.sub(r"[^\d]", "", time_str)) if time_str.isdigit() else 0
+
+def format_time(seconds: int) -> str:
+    """Convert seconds to human-readable time"""
+    if seconds >= 86400:
+        return f"{seconds // 86400} day(s)"
+    elif seconds >= 3600:
+        return f"{seconds // 3600} hour(s)"
+    elif seconds >= 60:
+        return f"{seconds // 60} minute(s)"
+    return f"{seconds} second(s)"
+
+# ========================
+# COMMAND HANDLERS
+# ========================
 
 @Client.on_message(filters.command("daily") & filters.private)
 async def daily_command(client, message: Message):
@@ -41,6 +114,10 @@ async def daily_command(client, message: Message):
         reply_markup=InlineKeyboardMarkup(buttons)
     )
 
+# ========================
+# CALLBACK HANDLERS
+# ========================
+
 @Client.on_callback_query(filters.regex("^daily_new$"))
 async def new_daily_post(client, callback: CallbackQuery):
     """Start creating new daily post"""
@@ -52,6 +129,145 @@ async def new_daily_post(client, callback: CallbackQuery):
         ])
     )
     await callback.answer()
+
+@Client.on_callback_query(filters.regex("^daily_list$"))
+async def list_daily_posts(client, callback: CallbackQuery):
+    """Show user's daily posts"""
+    user_id = callback.from_user.id
+    posts = await db.daily_posts.find({"user_id": user_id}).to_list(None)
+    
+    if not posts:
+        return await callback.answer("You have no daily posts!", show_alert=True)
+    
+    buttons = []
+    for post in posts:
+        status = "⏸ Paused" if not post["schedule"]["is_active"] else "▶ Active"
+        buttons.append([
+            InlineKeyboardButton(
+                f"{post['schedule']['post_time']} ({status})",
+                callback_data=f"daily_detail_{post['_id']}"
+            )
+        ])
+    
+    buttons.append([InlineKeyboardButton("🔙 Back", callback_data="daily_back")])
+    
+    await callback.message.edit_text(
+        "📅 Your Daily Posts:",
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
+    await callback.answer()
+
+@Client.on_callback_query(filters.regex(r"^daily_detail_"))
+async def show_daily_post(client, callback: CallbackQuery):
+    """Show details of a specific daily post"""
+    post_id = callback.data.split("_")[2]
+    post = await db.daily_posts.find_one({"_id": post_id})
+    
+    if not post:
+        return await callback.answer("Post not found!", show_alert=True)
+    
+    # Get the original content
+    try:
+        content = await client.get_messages(
+            chat_id=post["content"]["chat_id"],
+            message_ids=post["content"]["message_id"]
+        )
+    except:
+        return await callback.answer("Original message not found!", show_alert=True)
+    
+    status = "⏸ Paused" if not post["schedule"]["is_active"] else "▶ Active"
+    delete_time = "Never" if post["schedule"]["delete_after"] == 0 else format_time(post["schedule"]["delete_after"])
+    
+    # Create action buttons
+    action_button = InlineKeyboardButton(
+        "⏸ Pause" if post["schedule"]["is_active"] else "▶ Resume",
+        callback_data=f"daily_toggle_{post_id}"
+    )
+    
+    buttons = [
+        [action_button],
+        [InlineKeyboardButton("🗑 Delete", callback_data=f"daily_delete_{post_id}")],
+        [InlineKeyboardButton("🔙 Back", callback_data="daily_list")]
+    ]
+    
+    # Send the original content with controls
+    await content.copy(
+        chat_id=callback.message.chat.id,
+        caption=f"⏰ Daily at {post['schedule']['post_time']}\n"
+                f"🗑 Auto-delete: {delete_time}\n"
+                f"📌 Status: {status}",
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
+    await callback.answer()
+
+@Client.on_callback_query(filters.regex(r"^daily_toggle_"))
+async def toggle_daily_post(client, callback: CallbackQuery):
+    """Toggle pause/resume for daily post"""
+    post_id = callback.data.split("_")[2]
+    post = await db.daily_posts.find_one({"_id": post_id})
+    
+    new_status = not post["schedule"]["is_active"]
+    await db.daily_posts.update_one(
+        {"_id": post_id},
+        {"$set": {"schedule.is_active": new_status}}
+    )
+    
+    # Update scheduler
+    if new_status:
+        await schedule_daily_post(client, post_id)
+    else:
+        try:
+            client.scheduler.remove_job(f"daily_{post_id}")
+        except:
+            pass
+    
+    await callback.answer(f"Post {'paused' if not new_status else 'resumed'}!")
+    await show_daily_post(client, callback)  # Refresh the view
+
+@Client.on_callback_query(filters.regex(r"^daily_delete_"))
+async def delete_daily_post(client, callback: CallbackQuery):
+    """Delete a daily post"""
+    post_id = callback.data.split("_")[2]
+    
+    # Remove from scheduler
+    try:
+        client.scheduler.remove_job(f"daily_{post_id}")
+    except:
+        pass
+    
+    await db.daily_posts.delete_one({"_id": post_id})
+    await callback.answer("Daily post deleted!")
+    await list_daily_posts(client, callback)  # Go back to list
+
+@Client.on_callback_query(filters.regex("^daily_back$"))
+async def back_to_daily_menu(client, callback: CallbackQuery):
+    """Return to main daily menu"""
+    await daily_command(client, callback.message)
+    await callback.answer()
+
+@Client.on_callback_query(filters.regex("^daily_cancel$"))
+async def cancel_daily_creation(client, callback: CallbackQuery):
+    """Cancel current operation"""
+    user_id = callback.from_user.id
+    await db.temp_daily.delete_one({"user_id": user_id})
+    await daily_command(client, callback.message)
+    await callback.answer("Operation cancelled")
+
+@Client.on_callback_query(filters.regex("^daily_nodelete$"))
+async def set_no_deletion(client, callback: CallbackQuery):
+    """Set no deletion time"""
+    msg = await callback.message.edit_text(
+        "🗑 **Step 3/3**\n"
+        "Enter 'no' to keep posts forever:",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("🚫 Cancel", callback_data="daily_cancel")]
+        ])
+    )
+    await callback.answer()
+
+# ========================
+# MESSAGE HANDLERS
+# ========================
 
 @Client.on_message(filters.private & filters.forwarded)
 async def handle_daily_content(client, message: Message):
@@ -144,7 +360,7 @@ async def set_delete_time(client, message: Message):
     await db.temp_daily.delete_one({"user_id": user_id})
     
     # Start scheduler
-    schedule_daily_post(client, post_id)
+    await schedule_daily_post(client, post_id)
     
     await message.reply(
         f"✅ Daily post scheduled for {temp_data['schedule']['post_time']}!\n\n"
@@ -155,196 +371,15 @@ async def set_delete_time(client, message: Message):
         ])
     )
 
-@Client.on_callback_query(filters.regex("^daily_list$"))
-async def list_daily_posts(client, callback: CallbackQuery):
-    """Show user's daily posts"""
-    user_id = callback.from_user.id
-    posts = await db.daily_posts.find({"user_id": user_id}).to_list(None)
-    
-    if not posts:
-        return await callback.answer("You have no daily posts!", show_alert=True)
-    
-    buttons = []
-    for post in posts:
-        status = "⏸ Paused" if not post["schedule"]["is_active"] else "▶ Active"
-        buttons.append([
-            InlineKeyboardButton(
-                f"{post['schedule']['post_time']} ({status})",
-                callback_data=f"daily_detail_{post['_id']}"
-            )
-        ])
-    
-    buttons.append([InlineKeyboardButton("🔙 Back", callback_data="daily_back")])
-    
-    await callback.message.edit_text(
-        "📅 Your Daily Posts:",
-        reply_markup=InlineKeyboardMarkup(buttons)
-    )
-    await callback.answer()
+# ========================
+# INITIALIZATION
+# ========================
 
-@Client.on_callback_query(filters.regex(r"^daily_detail_"))
-async def show_daily_post(client, callback: CallbackQuery):
-    """Show details of a specific daily post"""
-    post_id = callback.data.split("_")[2]
-    post = await db.daily_posts.find_one({"_id": post_id})
-    
-    if not post:
-        return await callback.answer("Post not found!", show_alert=True)
-    
-    # Get the original content
-    try:
-        content = await client.get_messages(
-            chat_id=post["content"]["chat_id"],
-            message_ids=post["content"]["message_id"]
-        )
-    except:
-        return await callback.answer("Original message not found!", show_alert=True)
-    
-    status = "⏸ Paused" if not post["schedule"]["is_active"] else "▶ Active"
-    delete_time = "Never" if post["schedule"]["delete_after"] == 0 else format_time(post["schedule"]["delete_after"])
-    
-    # Create action buttons
-    action_button = InlineKeyboardButton(
-        "⏸ Pause" if post["schedule"]["is_active"] else "▶ Resume",
-        callback_data=f"daily_toggle_{post_id}"
-    )
-    
-    buttons = [
-        [action_button],
-        [InlineKeyboardButton("🗑 Delete", callback_data=f"daily_delete_{post_id}")],
-        [InlineKeyboardButton("🔙 Back", callback_data="daily_list")]
-    ]
-    
-    # Send the original content with controls
-    await content.copy(
-        chat_id=callback.message.chat.id,
-        caption=f"⏰ Daily at {post['schedule']['post_time']}\n"
-                f"🗑 Auto-delete: {delete_time}\n"
-                f"📌 Status: {status}",
-        reply_markup=InlineKeyboardMarkup(buttons)
-    )
-    await callback.answer()
+async def initialize_daily_scheduler(client):
+    """Initialize all scheduled posts on bot startup"""
+    active_posts = await db.daily_posts.find({"schedule.is_active": True}).to_list(None)
+    for post in active_posts:
+        await schedule_daily_post(client, post["_id"])
 
-@Client.on_callback_query(filters.regex(r"^daily_toggle_"))
-async def toggle_daily_post(client, callback: CallbackQuery):
-    """Toggle pause/resume for daily post"""
-    post_id = callback.data.split("_")[2]
-    post = await db.daily_posts.find_one({"_id": post_id})
-    
-    new_status = not post["schedule"]["is_active"]
-    await db.daily_posts.update_one(
-        {"_id": post_id},
-        {"$set": {"schedule.is_active": new_status}}
-    )
-    
-    await callback.answer(f"Post {'paused' if not new_status else 'resumed'}!")
-    await show_daily_post(client, callback)  # Refresh the view
-
-@Client.on_callback_query(filters.regex(r"^daily_delete_"))
-async def delete_daily_post(client, callback: CallbackQuery):
-    """Delete a daily post"""
-    post_id = callback.data.split("_")[2]
-    await db.daily_posts.delete_one({"_id": post_id})
-    await callback.answer("Daily post deleted!")
-    await list_daily_posts(client, callback)  # Go back to list
-
-@Client.on_callback_query(filters.regex("^daily_back$"))
-async def back_to_daily_menu(client, callback: CallbackQuery):
-    """Return to main daily menu"""
-    await daily_command(client, callback.message)
-    await callback.answer()
-
-@Client.on_callback_query(filters.regex("^daily_cancel$"))
-async def cancel_daily_creation(client, callback: CallbackQuery):
-    """Cancel current operation"""
-    user_id = callback.from_user.id
-    await db.temp_daily.delete_one({"user_id": user_id})
-    await daily_command(client, callback.message)
-    await callback.answer("Operation cancelled")
-
-@Client.on_callback_query(filters.regex("^daily_nodelete$"))
-async def set_no_deletion(client, callback: CallbackQuery):
-    """Set no deletion time"""
-    await callback.message.edit_text(
-        "Enter the daily posting time (24h format):\n\n"
-        "Example: `09:30` or `15:00`",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🚫 Cancel", callback_data="daily_cancel")]
-        ])
-    )
-    await callback.answer()
-
-# Helper Functions
-def schedule_daily_post(client, post_id):
-    """Schedule the daily posting job"""
-    async def job():
-        post = await db.daily_posts.find_one({"_id": post_id})
-        if not post or not post["schedule"]["is_active"]:
-            return
-        
-        # Get all channels (post to all)
-        channels = await db.get_all_channels()  # Implement this in your db.py
-        
-        for channel in channels:
-            try:
-                msg = await client.copy_message(
-                    chat_id=channel["_id"],
-                    from_chat_id=post["content"]["chat_id"],
-                    message_id=post["content"]["message_id"]
-                )
-                
-                if post["schedule"]["delete_after"] > 0:
-                    asyncio.create_task(
-                        delete_later(client, channel["_id"], msg.id, post["schedule"]["delete_after"])
-                    )
-                
-            except Exception as e:
-                print(f"Failed to post {post_id} to {channel['_id']}: {e}")
-        
-        # Update last posted time
-        await db.daily_posts.update_one(
-            {"_id": post_id},
-            {"$set": {"schedule.last_posted": time.time()}}
-        )
-    
-    # Get post time
-    post = await db.daily_posts.find_one({"_id": post_id})
-    hour, minute = map(int, post["schedule"]["post_time"].split(":"))
-    
-    # Schedule the job
-    client.scheduler.add_job(
-        job,
-        "cron",
-        hour=hour,
-        minute=minute,
-        id=f"daily_{post_id}"
-    )
-
-async def delete_later(client, chat_id, message_id, delay_seconds):
-    """Helper for auto-deletion"""
-    await asyncio.sleep(delay_seconds)
-    try:
-        await client.delete_messages(chat_id, message_id)
-    except:
-        pass
-
-def parse_time_to_seconds(time_str: str) -> int:
-    """Convert time string to seconds"""
-    time_str = time_str.lower()
-    if "min" in time_str or "m" in time_str:
-        return int(time_str.replace("min", "").replace("m", "")) * 60
-    elif "hour" in time_str or "hr" in time_str or "h" in time_str:
-        return int(time_str.replace("hour", "").replace("hr", "").replace("h", "")) * 3600
-    elif "day" in time_str or "d" in time_str:
-        return int(time_str.replace("day", "").replace("d", "")) * 86400
-    return 0
-
-def format_time(seconds: int) -> str:
-    """Convert seconds to human-readable time"""
-    if seconds >= 86400:
-        return f"{seconds // 86400} day(s)"
-    elif seconds >= 3600:
-        return f"{seconds // 3600} hour(s)"
-    elif seconds >= 60:
-        return f"{seconds // 60} minute(s)"
-    return f"{seconds} second(s)"
+# Add this to your bot's startup:
+# asyncio.create_task(initialize_daily_scheduler(client))
