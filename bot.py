@@ -32,7 +32,7 @@ class Bot(Client):
 
     async def initialize_daily_scheduler(self):
         """Initialize all scheduled posts on bot startup"""
-        from plugins.daily_scheduler import schedule_daily_post  # Import here to avoid circular imports
+        from plugins.Post.Daily import schedule_daily_post  # Import here to avoid circular imports
         
         # Use the properly imported db connection
         active_posts = await db.daily_posts.find({"schedule.is_active": True}).to_list(None)
