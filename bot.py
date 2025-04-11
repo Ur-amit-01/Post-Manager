@@ -37,11 +37,11 @@ class Bot(Client):
         await restore_pending_deletions(self)
         
         logging.info(f"{me.first_name} ✅✅ BOT started successfully ✅✅")
-        logging.info("Pending deletions restored successfully")
+        logging.info("{me.first_name} Pending deletions restored successfully.")
 
     async def stop(self, *args):
         await super().stop()      
-        logging.info("Bot Stopped 🙄")
+        logging.info("{me.first_name} Bot Stopped 🙄")
 
 bot = Bot()
 bot.run()
