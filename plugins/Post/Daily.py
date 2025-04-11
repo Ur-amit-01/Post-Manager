@@ -213,7 +213,7 @@ async def handle_content_selection(client, callback: CallbackQuery):
     
     await callback.answer()
 
-@Client.on_message(filters.private & (filters.forwarded | (filters.text & ~filters.command)))
+@Client.on_message(filters.private & (filters.forwarded | (filters.text & ~filters.command("daily"))))
 async def handle_content_input(client, message: Message):
     """Handle both forwarded and new content"""
     user_id = message.from_user.id
