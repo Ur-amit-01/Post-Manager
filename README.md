@@ -30,10 +30,25 @@
  * Accept pending join requests
  * Manage TG Posts
 
-### 🚦 Commands
-```
+## ⚡ Commands
 
-```
+- **`start`**: 🚀 Start the bot.
+- **`batch`**: 🫠 Extract in bulk.
+- **`transfer`**: 💘 Gift premium to others.
+- **`myplan`**: ⌛ Get your plan details.
+- **`add`**: ➕ Add user to premium.
+- **`rem`**: ➖ Remove user from premium.
+- **`session`**: 🧵 Generate Pyrogramv2 session.
+- **`settings`**: ⚙️ Personalize settings.
+- **`stats`**: 📊 Get stats of the bot.
+- **`plan`**: 🗓️ Check our premium plans.
+- **`terms`**: 🥺 Terms and conditions.
+- **`speedtest`**: 🚅 Check the server speed.
+- **`get`**: 🗄️ Get all user IDs.
+- **`lock`**: 🔒 Protect channel from extraction.
+- **`gcast`**: ⚡ Broadcast message to bot users.
+- **`help`**: ❓ Help if you're new.
+- **`cancel`**: 🚫 Cancel batch process.
 
 ### ⚡️ Configs 
 * `BOT_TOKEN`  - Get bot token from @BotFather
