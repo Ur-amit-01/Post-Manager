@@ -2,9 +2,15 @@ import asyncio
 import time
 import re
 from datetime import datetime, time as dt_time, timedelta
-from typing import Dict
+from typing import Dict, Union
 from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message, CallbackQuery
+from pyrogram.types import (
+    InlineKeyboardMarkup, 
+    InlineKeyboardButton, 
+    Message, 
+    CallbackQuery,
+    ForceReply
+)
 from config import ADMIN
 from plugins.helper.db import db
 
@@ -181,36 +187,33 @@ async def new_daily_post(client, callback: CallbackQuery):
     )
     await callback.answer()
 
-@Client.on_callback_query(filters.regex("^forward_content$"))
-async def request_forwarded_content(client, callback: CallbackQuery):
-    """Request forwarded content"""
+@Client.on_callback_query(filters.regex("^(forward_content|create_content|back_to_time_input)$"))
+async def handle_content_selection(client, callback: CallbackQuery):
+    """Handle content selection and move to time input"""
     user_id = callback.from_user.id
-    user_states[user_id]["state"] = "awaiting_forwarded"
     
-    await callback.message.edit_text(
-        "📤 Please forward the message you want to post daily:",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🚫 Cancel", callback_data="daily_cancel")]
-        ])
-    )
+    if callback.data == "forward_content":
+        user_states[user_id]["state"] = "awaiting_forwarded"
+        await callback.message.edit_text(
+            "📤 Please forward the message you want to post daily:",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🚫 Cancel", callback_data="daily_cancel")]
+            ])
+        )
+    elif callback.data == "create_content":
+        user_states[user_id]["state"] = "awaiting_new_content"
+        await callback.message.edit_text(
+            "✏️ Please send the message you want to post daily:",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🚫 Cancel", callback_data="daily_cancel")]
+            ])
+        )
+    else:  # back_to_time_input
+        await request_time_input(client, callback.message)
+    
     await callback.answer()
 
-@Client.on_callback_query(filters.regex("^create_content$"))
-async def request_new_content(client, callback: CallbackQuery):
-    """Request new content creation"""
-    user_id = callback.from_user.id
-    user_states[user_id]["state"] = "awaiting_new_content"
-    
-    await callback.message.edit_text(
-        "✏️ Please send the message you want to post daily:\n\n"
-        "You can send text, photos, videos, or any other supported media.",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🚫 Cancel", callback_data="daily_cancel")]
-        ])
-    )
-    await callback.answer()
-
-@Client.on_message(filters.private & (filters.forwarded | filters.text | filters.media | filters.document))
+@Client.on_message(filters.private & (filters.forwarded | (filters.text & ~filters.command)))
 async def handle_content_input(client, message: Message):
     """Handle both forwarded and new content"""
     user_id = message.from_user.id
@@ -230,7 +233,6 @@ async def handle_content_input(client, message: Message):
             "message_id": message.forward_from_message_id,
             "chat_id": message.forward_from_chat.id
         }
-        user_states[user_id]["state"] = "awaiting_time"
         await request_time_input(client, message)
         
     elif state == "awaiting_new_content":
@@ -240,37 +242,74 @@ async def handle_content_input(client, message: Message):
             "message_id": message.id,
             "chat_id": message.chat.id
         }
-        user_states[user_id]["state"] = "awaiting_time"
         await request_time_input(client, message)
 
-async def request_time_input(client, message: Message):
-    """Request time input with flexible options"""
+async def request_time_input(client, message: Union[Message, CallbackQuery]):
+    """Request time input using force reply"""
+    if isinstance(message, CallbackQuery):
+        message = message.message
+    
     user_id = message.from_user.id
+    user_states[user_id]["state"] = "awaiting_time"
     
     buttons = [
-        [InlineKeyboardButton("🕘 Suggest Common Times", callback_data="suggest_times")],
+        [InlineKeyboardButton("🕘 Suggest Times", callback_data="suggest_times")],
         [InlineKeyboardButton("🚫 Cancel", callback_data="daily_cancel")]
     ]
     
-    await message.reply(
+    msg = await message.reply(
         "⏰ **Step 2/3**\n"
-        "Enter the daily posting time:\n\n"
-        "Flexible formats accepted:\n"
-        "• `09:30` (24h)\n"
-        "• `2:30pm` (12h)\n"
-        "• `3pm` (just hour)\n"
-        "• `15:00` (24h)\n\n"
-        "Or click below for suggestions:",
-        reply_markup=InlineKeyboardMarkup(buttons)
+        "Please reply to this message with your posting time:\n\n"
+        "Formats accepted:\n"
+        "• 09:30 (24h)\n"
+        "• 2:30pm (12h)\n"
+        "• 3pm (hour only)\n",
+        reply_markup=ForceReply(selective=True),
+        reply_to_message_id=message.id
     )
+    
+    # Store the force reply message ID
+    user_states[user_id]["force_reply_msg"] = msg.id
+
+@Client.on_message(filters.private & filters.reply & ~filters.command("daily"))
+async def handle_time_reply(client, message: Message):
+    """Handle time input from force reply"""
+    user_id = message.from_user.id
+    
+    # Check if this is a reply to our force reply message
+    if (user_id not in user_states or 
+        user_states[user_id].get("state") != "awaiting_time" or
+        message.reply_to_message_id != user_states[user_id].get("force_reply_msg")):
+        return
+    
+    time_str = message.text.strip()
+    formatted_time, valid = validate_time_input(time_str)
+    
+    if not valid:
+        await message.reply(
+            "❌ Invalid time format. Please reply again with:\n"
+            "• 09:30 (24h)\n"
+            "• 2:30pm (12h)\n"
+            "• 3pm (hour only)\n\n"
+            "Reply to the previous message:",
+            reply_to_message_id=user_states[user_id]["force_reply_msg"],
+            reply_markup=ForceReply(selective=True)
+        )
+        return
+    
+    # Store the time and move to next step
+    user_states[user_id]["data"]["post_time"] = formatted_time
+    user_states[user_id]["state"] = "awaiting_delete"
+    
+    # Clean up force reply tracking
+    user_states[user_id].pop("force_reply_msg", None)
+    
+    await request_delete_option(client, message)
 
 @Client.on_callback_query(filters.regex("^suggest_times$"))
 async def suggest_times(client, callback: CallbackQuery):
-    """Suggest common posting times"""
-    common_times = [
-        "08:00", "12:00", "15:00", "18:00", "21:00",
-        "9am", "12pm", "3pm", "6pm", "9pm"
-    ]
+    """Suggest common times with force reply compatibility"""
+    common_times = ["08:00", "12:00", "15:00", "18:00", "21:00", "9am", "12pm", "3pm", "6pm", "9pm"]
     
     buttons = [
         [InlineKeyboardButton(time, callback_data=f"select_time_{time}")]
@@ -279,7 +318,7 @@ async def suggest_times(client, callback: CallbackQuery):
     buttons.append([InlineKeyboardButton("↩️ Back", callback_data="back_to_time_input")])
     
     await callback.message.edit_text(
-        "🕘 Select a suggested time:",
+        "🕘 Select a suggested time (will auto-fill):",
         reply_markup=InlineKeyboardMarkup(buttons)
     )
     await callback.answer()
@@ -290,49 +329,26 @@ async def handle_time_selection(client, callback: CallbackQuery):
     time_str = callback.data.split("_")[2]
     user_id = callback.from_user.id
     
-    # Validate and format the time
     formatted_time, valid = validate_time_input(time_str)
     if not valid:
         await callback.answer("Invalid time format", show_alert=True)
         return
     
+    # Store the selected time
     user_states[user_id]["data"]["post_time"] = formatted_time
     user_states[user_id]["state"] = "awaiting_delete"
+    
+    # Clean up force reply tracking if exists
+    user_states[user_id].pop("force_reply_msg", None)
+    
     await request_delete_option(client, callback.message)
+    await callback.answer(f"Selected: {formatted_time}")
 
-@Client.on_callback_query(filters.regex("^back_to_time_input$"))
-async def back_to_time_input(client, callback: CallbackQuery):
-    """Return to time input"""
-    await request_time_input(client, callback.message)
-    await callback.answer()
-
-@Client.on_message(filters.private & filters.text & ~filters.command("daily"))
-async def handle_time_input_text(client, message: Message):
-    """Handle text input for time"""
-    user_id = message.from_user.id
-    
-    if user_id not in user_states or user_states[user_id]["state"] != "awaiting_time":
-        return
-    
-    time_str = message.text.strip()
-    formatted_time, valid = validate_time_input(time_str)
-    
-    if not valid:
-        await message.reply(
-            "❌ Invalid time format. Please use:\n"
-            "• `09:30` (24h)\n"
-            "• `2:30pm` (12h)\n"
-            "• `3pm` (just hour)\n"
-            "• `15:00` (24h)"
-        )
-        return
-    
-    user_states[user_id]["data"]["post_time"] = formatted_time
-    user_states[user_id]["state"] = "awaiting_delete"
-    await request_delete_option(message)
-
-async def request_delete_option(message: Message):
+async def request_delete_option(client, message: Union[Message, CallbackQuery]):
     """Request delete after option"""
+    if isinstance(message, CallbackQuery):
+        message = message.message
+    
     buttons = [
         [
             InlineKeyboardButton("30m", callback_data="delete_30m"),
@@ -358,8 +374,8 @@ async def request_delete_option(message: Message):
         reply_markup=InlineKeyboardMarkup(buttons)
     )
 
-# [Rest of the handlers (delete options, confirmation, etc.) remain similar but updated to use user_states]
-# [Include all the other handlers from the original code but adapt them to use the new state system]
+# [Rest of the handlers (delete options, confirmation, etc.) remain the same]
+# [Include all the other handlers from the original code]
 
 # ========================
 # INITIALIZATION
