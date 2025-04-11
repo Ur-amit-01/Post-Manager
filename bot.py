@@ -24,9 +24,8 @@ class Bot(Client):
             plugins={"root": "plugins"},
             sleep_threshold=5,
         )
-        # Initialize scheduler
+        # Initialize scheduler but don't start it yet
         self.scheduler = AsyncIOScheduler()
-        self.scheduler.start()
 
     async def initialize_daily_scheduler(self):
         """Initialize all scheduled posts on bot startup"""
@@ -52,8 +51,11 @@ class Bot(Client):
         # Restore pending deletions
         await restore_pending_deletions(self)
         
+        # Start the scheduler now that we have a running event loop
+        self.scheduler.start()
+        
         # Initialize daily scheduler
-        asyncio.create_task(self.initialize_daily_scheduler())
+        await self.initialize_daily_scheduler()
         
         logging.info(f"{me.first_name} ✅✅ BOT started successfully ✅✅")
         logging.info("Pending deletions restored successfully")
@@ -61,7 +63,8 @@ class Bot(Client):
 
     async def stop(self, *args):
         # Shutdown scheduler gracefully
-        self.scheduler.shutdown(wait=False)
+        if self.scheduler.running:
+            self.scheduler.shutdown(wait=False)
         await super().stop()      
         logging.info("Bot Stopped 🙄")
 
