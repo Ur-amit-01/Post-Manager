@@ -2,18 +2,96 @@ import motor.motor_asyncio
 import time
 from config import DB_URL, DB_NAME
 from datetime import datetime
+from typing import Dict, Optional, List
 
 class Database:
     def __init__(self, uri, database_name):
         self._client = motor.motor_asyncio.AsyncIOMotorClient(uri)
         self.db = self._client[database_name]
-        self.col = self.db.user  # Collection for users
-        self.channels = self.db.channels  # Collection for channels
-        self.formatting = self.db.formatting  # Collection for formatting templates
-        self.admins = self.db.admins  # Collection for admins
-        self.posts = self.db.posts  # Collection for posts
-        self.daily_posts = self.db.daily_posts  # New collection for daily posts
-        self.temp_daily = self.db.temp_daily  # Temporary storage for daily post creation
+        
+        # Existing collections
+        self.col = self.db.user
+        self.channels = self.db.channels
+        self.formatting = self.db.formatting
+        self.admins = self.db.admins
+        self.posts = self.db.posts        
+        # New collections for bot cloning
+        self.bot_clones = self.db.bot_clones
+        self.clone_tokens = self.db.clone_tokens
+
+    #============ Bot Clone System ============#
+    async def add_bot_clone(self, user_id: int, bot_token: str, bot_username: str) -> bool:
+        """Add a new bot clone to the database"""
+        try:
+            await self.bot_clones.update_one(
+                {"user_id": user_id},
+                {"$set": {
+                    "bot_token": bot_token,
+                    "bot_username": bot_username,
+                    "created_at": datetime.now(),
+                    "is_active": True
+                }},
+                upsert=True
+            )
+            return True
+        except Exception as e:
+            print(f"Error adding bot clone: {e}")
+            return False
+
+    async def get_bot_clone(self, user_id: int) -> Optional[Dict]:
+        """Get a user's bot clone information"""
+        try:
+            return await self.bot_clones.find_one({"user_id": user_id})
+        except Exception as e:
+            print(f"Error getting bot clone: {e}")
+            return None
+
+    async def delete_bot_clone(self, user_id: int) -> bool:
+        """Remove a bot clone from the database"""
+        try:
+            result = await self.bot_clones.delete_one({"user_id": user_id})
+            return result.deleted_count > 0
+        except Exception as e:
+            print(f"Error deleting bot clone: {e}")
+            return False
+
+    async def get_all_active_clones(self) -> List[Dict]:
+        """Get all active bot clones"""
+        try:
+            return await self.bot_clones.find({"is_active": True}).to_list(None)
+        except Exception as e:
+            print(f"Error getting active clones: {e}")
+            return []
+
+    async def store_clone_token(self, user_id: int, token_data: Dict) -> bool:
+        """Store temporary token data during clone creation"""
+        try:
+            await self.clone_tokens.update_one(
+                {"user_id": user_id},
+                {"$set": token_data},
+                upsert=True
+            )
+            return True
+        except Exception as e:
+            print(f"Error storing clone token: {e}")
+            return False
+
+    async def get_clone_token_data(self, user_id: int) -> Optional[Dict]:
+        """Get temporary token data"""
+        try:
+            return await self.clone_tokens.find_one({"user_id": user_id})
+        except Exception as e:
+            print(f"Error getting clone token data: {e}")
+            return None
+
+    async def clear_clone_token(self, user_id: int) -> bool:
+        """Clear temporary token data"""
+        try:
+            await self.clone_tokens.delete_one({"user_id": user_id})
+            return True
+        except Exception as e:
+            print(f"Error clearing clone token: {e}")
+            return False
 
     #============ User System ============#
     def new_user(self, id):
