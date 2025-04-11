@@ -31,10 +31,7 @@ class Bot(Client):
         self.username = me.username
         
         # Start web server
-        app = web.AppRunner(await web_server())
-        await app.setup()
-        bind_address = "0.0.0.0"
-        await web.TCPSite(app, bind_address, PORT).start()
+
         
         # Restore pending deletions using your existing function
         await restore_pending_deletions(self)
