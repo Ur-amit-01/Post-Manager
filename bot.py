@@ -8,6 +8,9 @@ from plugins.Post.Posting import restore_pending_deletions
 import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+# Import the database connection properly
+from plugins.helper.db import db
+
 logging.config.fileConfig('logging.conf')
 logging.getLogger().setLevel(logging.INFO)
 logging.getLogger("pyrogram").setLevel(logging.ERROR)
@@ -29,9 +32,10 @@ class Bot(Client):
 
     async def initialize_daily_scheduler(self):
         """Initialize all scheduled posts on bot startup"""
-        from plugins.Post.Daily import schedule_daily_post  # Import here to avoid circular imports
+        from plugins.daily_scheduler import schedule_daily_post  # Import here to avoid circular imports
         
-        active_posts = await plugins.helper.db.daily_posts.find({"schedule.is_active": True}).to_list(None)
+        # Use the properly imported db connection
+        active_posts = await db.daily_posts.find({"schedule.is_active": True}).to_list(None)
         for post in active_posts:
             await schedule_daily_post(self, post["_id"])
         logging.info(f"Initialized {len(active_posts)} daily posts")
