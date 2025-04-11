@@ -1,6 +1,7 @@
 import motor.motor_asyncio
 import time
 from config import DB_URL, DB_NAME
+from datetime import datetime
 
 class Database:
     def __init__(self, uri, database_name):
@@ -11,6 +12,8 @@ class Database:
         self.formatting = self.db.formatting  # Collection for formatting templates
         self.admins = self.db.admins  # Collection for admins
         self.posts = self.db.posts  # Collection for posts
+        self.daily_posts = self.db.daily_posts  # New collection for daily posts
+        self.temp_daily = self.db.temp_daily  # Temporary storage for daily post creation
 
     #============ User System ============#
     def new_user(self, id):
@@ -60,12 +63,8 @@ class Database:
     async def get_all_channels(self):
         return [channel async for channel in self.channels.find({})]
 
-    #============ Post System ============#
+    #============ Regular Post System ============#
     async def save_post(self, post_data):
-        """
-        Save a post with all its data including deletion info
-        :param post_data: Dictionary containing all post information
-        """
         try:
             await self.posts.update_one(
                 {"post_id": post_data["post_id"]},
@@ -78,10 +77,6 @@ class Database:
             return False
 
     async def get_post(self, post_id):
-        """
-        Retrieve complete post data by its ID
-        :param post_id: Unique ID of the post
-        """
         try:
             return await self.posts.find_one({"post_id": post_id})
         except Exception as e:
@@ -89,10 +84,6 @@ class Database:
             return None
 
     async def delete_post(self, post_id):
-        """
-        Delete a post by its ID
-        :param post_id: Unique ID of the post
-        """
         try:
             await self.posts.delete_one({"post_id": post_id})
             return True
@@ -101,10 +92,6 @@ class Database:
             return False
 
     async def get_pending_deletions(self):
-        """
-        Get all posts with pending deletions
-        :return: List of posts where delete_after > current time
-        """
         try:
             return await self.posts.find({
                 "delete_after": {"$gt": time.time()}
@@ -114,11 +101,6 @@ class Database:
             return []
 
     async def remove_channel_post(self, post_id, channel_id):
-        """
-        Remove a specific channel from a post
-        :param post_id: ID of the post
-        :param channel_id: ID of the channel to remove
-        """
         try:
             result = await self.posts.update_one(
                 {"post_id": post_id},
@@ -130,11 +112,6 @@ class Database:
             return False
 
     async def get_post_channels(self, post_id):
-        """
-        Get remaining channels for a post
-        :param post_id: ID of the post
-        :return: List of channels or empty list
-        """
         try:
             post = await self.posts.find_one({"post_id": post_id})
             return post.get("channels", []) if post else []
@@ -143,15 +120,123 @@ class Database:
             return []
 
     async def get_all_posts(self):
-        """
-        Retrieve all posts
-        :return: List of all posts
-        """
         try:
             return [post async for post in self.posts.find({})]
         except Exception as e:
             print(f"Error retrieving posts: {e}")
             return []
+
+    #============ Daily Post System ============#
+    async def create_daily_post(self, user_id, content, post_time, delete_after=0):
+        """Create a new daily post entry"""
+        try:
+            post_id = f"daily_{user_id}_{int(time.time())}"
+            post_data = {
+                "_id": post_id,
+                "user_id": user_id,
+                "content": content,
+                "schedule": {
+                    "post_time": post_time,  # Format: "HH:MM"
+                    "delete_after": delete_after,  # In seconds
+                    "is_active": True,
+                    "last_posted": 0  # Timestamp
+                }
+            }
+            await self.daily_posts.insert_one(post_data)
+            return post_id
+        except Exception as e:
+            print(f"Error creating daily post: {e}")
+            return None
+
+    async def get_daily_post(self, post_id):
+        """Get a specific daily post"""
+        try:
+            return await self.daily_posts.find_one({"_id": post_id})
+        except Exception as e:
+            print(f"Error getting daily post: {e}")
+            return None
+
+    async def get_user_daily_posts(self, user_id):
+        """Get all daily posts for a user"""
+        try:
+            return [post async for post in self.daily_posts.find({"user_id": user_id})]
+        except Exception as e:
+            print(f"Error getting user daily posts: {e}")
+            return []
+
+    async def toggle_daily_post_status(self, post_id, is_active):
+        """Pause or resume a daily post"""
+        try:
+            await self.daily_posts.update_one(
+                {"_id": post_id},
+                {"$set": {"schedule.is_active": is_active}}
+            )
+            return True
+        except Exception as e:
+            print(f"Error toggling daily post status: {e}")
+            return False
+
+    async def delete_daily_post(self, post_id):
+        """Delete a daily post"""
+        try:
+            await self.daily_posts.delete_one({"_id": post_id})
+            return True
+        except Exception as e:
+            print(f"Error deleting daily post: {e}")
+            return False
+
+    async def update_last_posted_time(self, post_id):
+        """Update the last posted timestamp"""
+        try:
+            await self.daily_posts.update_one(
+                {"_id": post_id},
+                {"$set": {"schedule.last_posted": time.time()}}
+            )
+            return True
+        except Exception as e:
+            print(f"Error updating last posted time: {e}")
+            return False
+
+    async def get_active_daily_posts(self):
+        """Get all active daily posts"""
+        try:
+            return [post async for post in self.daily_posts.find({
+                "schedule.is_active": True
+            })]
+        except Exception as e:
+            print(f"Error getting active daily posts: {e}")
+            return []
+
+    #============ Temporary Storage for Daily Post Creation ============#
+    async def save_temp_daily(self, user_id, data):
+        """Save temporary data during daily post creation"""
+        try:
+            await self.temp_daily.update_one(
+                {"user_id": user_id},
+                {"$set": data},
+                upsert=True
+            )
+            return True
+        except Exception as e:
+            print(f"Error saving temp daily data: {e}")
+            return False
+
+    async def get_temp_daily(self, user_id):
+        """Get temporary data for daily post creation"""
+        try:
+            return await self.temp_daily.find_one({"user_id": user_id})
+        except Exception as e:
+            print(f"Error getting temp daily data: {e}")
+            return None
+
+    async def clear_temp_daily(self, user_id):
+        """Clear temporary data after post creation"""
+        try:
+            await self.temp_daily.delete_one({"user_id": user_id})
+            return True
+        except Exception as e:
+            print(f"Error clearing temp daily data: {e}")
+            return False
 
 # Initialize the database
 db = Database(DB_URL, DB_NAME)
