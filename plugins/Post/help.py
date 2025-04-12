@@ -91,7 +91,9 @@ async def help_command(client, message: Message):
             [InlineKeyboardButton("📢 Post Help", callback_data="post_help"),
              InlineKeyboardButton("📋 Channel Help", callback_data="channel_help")],
             [InlineKeyboardButton("🗑 Delete Help", callback_data="delete_help"),
-             InlineKeyboardButton("🏠 Home", callback_data="start")]
+             InlineKeyboardButton("🏠 Home", callback_data="start")],
+            [InlineKeyboardButton("ʀᴇᴏ̨ᴜᴇsᴛ ᴀᴄᴄᴇᴘᴛᴏʀ", callback_data="request")],
+            [InlineKeyboardButton("ʀᴇsᴛʀɪᴄᴛᴇᴅ ᴄᴏɴᴛᴇɴᴛ sᴀᴠᴇʀ", callback_data="restricted")]
         ]),
         disable_web_page_preview=True
     )
