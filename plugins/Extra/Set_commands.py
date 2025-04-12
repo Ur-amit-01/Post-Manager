@@ -9,13 +9,11 @@ from config import *
 @Client.on_message(filters.command("set") & filters.user(ADMIN))
 async def set_commands(client: Client, message: Message):
     await client.set_bot_commands([
-        BotCommand("start", "🤖 Start the bot"),
-        BotCommand("merge", "🛠 Start PDF merge"),
-        BotCommand("done", "📂 Merge PDFs"),
-        BotCommand("telegraph", "🌐 Get Telegraph link"),
-        BotCommand("stickerid", "🎭 Get sticker ID"),
-        BotCommand("accept", "✅ Accept pending join requests"),
-        BotCommand("users", "👥 Total users"),
-        BotCommand("broadcast", "📢 Send message")
+        BotCommand("start", "🤖 Start me "),
+        BotCommand("channels", "🛠 Start PDF merge"),
+        BotCommand("post", "📂 Merge PDFs"),
+        BotCommand("del_post", "🌐 Get Telegraph link"),
+        BotCommand("add", "🎭 Get sticker ID"),
+        BotCommand("rem", "✅ Accept pending join requests"),
     ])
     await message.reply_text("✅ Bot commands have been set.")
