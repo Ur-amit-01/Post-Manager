@@ -4,16 +4,15 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQ
 from config import *
 
 # =====================================================================================
-
 # Set bot commands
 @Client.on_message(filters.command("set") & filters.user(ADMIN))
 async def set_commands(client: Client, message: Message):
     await client.set_bot_commands([
-        BotCommand("start", "🤖 Start me "),
-        BotCommand("channels", "🛠 Start PDF merge"),
-        BotCommand("post", "📂 Merge PDFs"),
-        BotCommand("del_post", "🌐 Get Telegraph link"),
-        BotCommand("add", "🎭 Get sticker ID"),
-        BotCommand("rem", "✅ Accept pending join requests"),
+        BotCommand("start", "🤖 ꜱᴛᴀʀᴛ ᴍᴇ"),
+        BotCommand("channels", "📋 ʟɪꜱᴛ ᴏꜰ ᴄᴏɴɴᴇᴄᴛᴇᴅ ᴄʜᴀɴɴᴇʟꜱ"),
+        BotCommand("post", "📢 ꜱᴇɴᴅ ᴘᴏꜱᴛ"),
+        BotCommand("del_post", "🗑️ ᴅᴇʟᴇᴛᴇ ᴘᴏꜱᴛ"),
+        BotCommand("add", "➕ ᴀᴅᴅ ᴄʜᴀɴɴᴇʟ"),
+        BotCommand("rem", "➖ ʀᴇᴍᴏᴠᴇ ᴄʜᴀɴɴᴇʟ"),
     ])
     await message.reply_text("✅ Bot commands have been set.")
