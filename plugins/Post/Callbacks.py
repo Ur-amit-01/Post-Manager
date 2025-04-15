@@ -142,7 +142,7 @@ LOG_TEXT = """<blockquote><b>#NewUser ॥ @interferons_bot </b></blockquote>
 ABOUT_TXT = """
 <b>╭───────────⍟
 ├➢ ᴍʏꜱᴇʟꜰ : {}
-├➢ ᴏᴡɴᴇʀ : <a href=https://t.me/axa_bachha>𝐻𝑜𝑚𝑜 𝑠𝑎𝑝𝑖𝑒𝑛『❅』</a>
+├➢ ᴅᴇᴠᴇʟᴏᴘᴇʀ : <a href=https://t.me/axa_bachha>𝐻𝑜𝑚𝑜 𝑠𝑎𝑝𝑖𝑒𝑛『❅』</a>
 ├➢ ʟɪʙʀᴀʀʏ : <a href=https://github.com/pyrogram>ᴘʏʀᴏɢʀᴀᴍ</a>
 ├➢ ʟᴀɴɢᴜᴀɢᴇ : <a href=https://www.python.org>ᴘʏᴛʜᴏɴ 3</a>
 ├➢ ᴅᴀᴛᴀʙᴀꜱᴇ : <a href=https://cloud.mongodb.com>MᴏɴɢᴏDB</a>
@@ -150,7 +150,7 @@ ABOUT_TXT = """
 ├➢ ʙᴜɪʟᴅ ꜱᴛᴀᴛᴜꜱ  : ᴘʏᴛʜᴏɴ v3.6.8
 ╰───────────────⍟
 
-➢ ɴᴏᴛᴇ :- This Repo is paid, interested Owners can DM. 🤝🏻
+➢ ɴᴏᴛᴇ :- Interested Owners can DM for personal bot. 🤝🏻
 </b>"""
 
 HELP_TXT = """
