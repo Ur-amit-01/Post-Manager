@@ -88,12 +88,12 @@ async def help_command(client, message: Message):
     await message.reply_text(
         MAIN_HELP_TXT,
         reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("ʀᴇᴏ̨ᴜᴇsᴛ ᴀᴄᴄᴇᴘᴛᴏʀ ✅", callback_data="request")],
+            [InlineKeyboardButton("ʀᴇsᴛʀɪᴄᴛᴇᴅ ᴄᴏɴᴛᴇɴᴛ sᴀᴠᴇʀ 📥", callback_data="restricted")],
             [InlineKeyboardButton("📢 Post Help", callback_data="post_help"),
              InlineKeyboardButton("📋 Channel Help", callback_data="channel_help")],
             [InlineKeyboardButton("🗑 Delete Help", callback_data="delete_help"),
-             InlineKeyboardButton("🏠 Home", callback_data="start")],
-            [InlineKeyboardButton("ʀᴇᴏ̨ᴜᴇsᴛ ᴀᴄᴄᴇᴘᴛᴏʀ", callback_data="request")],
-            [InlineKeyboardButton("ʀᴇsᴛʀɪᴄᴛᴇᴅ ᴄᴏɴᴛᴇɴᴛ sᴀᴠᴇʀ", callback_data="restricted")]
+             InlineKeyboardButton("🏠 Home", callback_data="start")]
         ]),
         disable_web_page_preview=True
     )
@@ -105,12 +105,12 @@ async def help_callbacks(client, query: CallbackQuery):
     if data == "help":
         text = MAIN_HELP_TXT
         buttons = [
+            [InlineKeyboardButton("ʀᴇᴏ̨ᴜᴇsᴛ ᴀᴄᴄᴇᴘᴛᴏʀ", callback_data="request")],
+            [InlineKeyboardButton("ʀᴇsᴛʀɪᴄᴛᴇᴅ ᴄᴏɴᴛᴇɴᴛ sᴀᴠᴇʀ", callback_data="restricted")],
             [InlineKeyboardButton("📢 Post Help", callback_data="post_help"),
              InlineKeyboardButton("📋 Channel Help", callback_data="channel_help")],
             [InlineKeyboardButton("🗑 Delete Help", callback_data="delete_help"),
-             InlineKeyboardButton("🏠 Home", callback_data="start")],
-            [InlineKeyboardButton("ʀᴇᴏ̨ᴜᴇsᴛ ᴀᴄᴄᴇᴘᴛᴏʀ", callback_data="request")],
-            [InlineKeyboardButton("ʀᴇsᴛʀɪᴄᴛᴇᴅ ᴄᴏɴᴛᴇɴᴛ sᴀᴠᴇʀ", callback_data="restricted")]
+             InlineKeyboardButton("🏠 Home", callback_data="start")]
         ]
     elif data == "post_help":
         text = POST_HELP_TXT
