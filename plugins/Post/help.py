@@ -4,9 +4,9 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, 
 # ========================================= HELP TEXTS =============================================
 
 MAIN_HELP_TXT = """
-<b>📚 Channel Manager Bot Help</b>
+<b>📚 Channel Manager Bot Help
 
-<u>👮 Admin Commands</u>:
+<blockquote><u>👮 Admin Commands</u>:</blockquote>
 • /start - Start the bot
 • /channels - List all connected channels
 • /post [time] - Post a message to all channels (reply to a message)
@@ -14,71 +14,71 @@ MAIN_HELP_TXT = """
 • /add - Add current channel (use in channel)
 • /rem - Remove current channel (use in channel)
 
-<u>⏱ Time Format Examples</u>:
+<blockquote><u>⏱ Time Format Examples</u>:</blockquote>
 • /post 1h30m - Post with 1 hour 30 minute delay
 • /post 2d - Post with 2 day delay
 • /post 45min - Post with 45 minute delay
 • /post 30s - Post with 30 second delay
 
-<u>🔧 Other Features</u>:
+<blockquote><u>🔧 Other Features</u>:</blockquote>
 • Auto-delete posts after specified time
 • Post tracking with unique IDs
 • Simple channel management
 
-<u>📊 Stats</u>:
+<blockquote><u>📊 Stats</u>:</blockquote>
 • Total connected channels
 • Success/failure rate tracking
 • Post history
 
-Developed by @Axa_bachha
+<blockquote>Developed by : @Axa_bachha</blockquote> </b>
 """
 
 POST_HELP_TXT = """
-<b>📢 Post Command Usage</b>
+<b>📢 Post Command Usage
 
-<code>/post [time]</code> - Reply to a message to broadcast it
+/post [time] - Reply to a message to broadcast it
 
-<u>Time Format Examples</u>:
+<blockquote><u>Time Format Examples</u>:</blockquote>
 • <code>/post 1h30m</code> - Auto-delete after 1.5 hours
 • <code>/post 2d</code> - Auto-delete after 2 days
 • <code>/post 45min</code> - Auto-delete after 45 minutes
 • <code>/post</code> - Post without auto-delete
 
-<u>Features</u>:
+<blockquote><u>Features</u>:</blockquote>
 • Supports all message types (text, media, polls, etc.)
 • Progress tracking during sending
-• Post ID for later management
+• Post ID for later management</b>
 """
 
 CHANNEL_HELP_TXT = """
-<b>📋 Channel Management</b>
+<b>📋 Channel Management
 
-<u>Add Channel</u>:
+<blockquote><u>Add Channel</u>:</blockquote>
 1. Add bot to your channel as admin
 2. Send <code>/add</code> in the channel
 
-<u>Remove Channel</u>:
+<blockquote><u>Remove Channel</u>:</blockquote>
 1. Send <code>/rem</code> in the channel
 2. Bot will be automatically removed
 
-<u>Requirements</u>:
+<blockquote><u>Requirements</u>:</blockquote>
 • Bot needs <b>post messages</b> permission
-• Bot needs <b>delete messages</b> permission for auto-delete
+• Bot needs <b>delete messages</b> permission for auto-delete </b>
 """
 
 DELETE_HELP_TXT = """
-<b>🗑 Delete Command Usage</b>
+<b><blockquote>🗑 Delete Command Usage</blockquote>
 
-<code>/del_post post_id</code> - Delete a specific post
+/del_post post_id - Delete a specific post
 
-<u>How to find Post ID</u>:
+<blockquote><u>How to find Post ID</u>:</blockquote>
 1. After posting, you'll receive a Post ID
 2. Or check your post history
 
-<u>Features</u>:
+<blockquote><u>Features</u>:</blockquote>
 • Deletes from all channels simultaneously
 • Clean database record removal
-• Immediate feedback on success/failure
+• Immediate feedback on success/failure </b>
 """
 
 # ========================================= HANDLERS =============================================
