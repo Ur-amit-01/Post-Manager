@@ -108,7 +108,9 @@ async def help_callbacks(client, query: CallbackQuery):
             [InlineKeyboardButton("📢 Post Help", callback_data="post_help"),
              InlineKeyboardButton("📋 Channel Help", callback_data="channel_help")],
             [InlineKeyboardButton("🗑 Delete Help", callback_data="delete_help"),
-             InlineKeyboardButton("🏠 Home", callback_data="start")]
+             InlineKeyboardButton("🏠 Home", callback_data="start")],
+            [InlineKeyboardButton("ʀᴇᴏ̨ᴜᴇsᴛ ᴀᴄᴄᴇᴘᴛᴏʀ", callback_data="request")],
+            [InlineKeyboardButton("ʀᴇsᴛʀɪᴄᴛᴇᴅ ᴄᴏɴᴛᴇɴᴛ sᴀᴠᴇʀ", callback_data="restricted")]
         ]
     elif data == "post_help":
         text = POST_HELP_TXT
