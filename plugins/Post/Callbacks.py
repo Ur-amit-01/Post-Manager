@@ -123,7 +123,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         ])
 
     elif data == "request":
-        txt = REQUEST_TXT
+        txt = REQUEST_TXT.format(client.mention)
         reply_markup = InlineKeyboardMarkup([
             [InlineKeyboardButton("◀️ 𝙱𝙰𝙲𝙺", callback_data="help")]
         ])
@@ -178,7 +178,7 @@ REQUEST_TXT = """
 
 • I can accept all pending join requests in your channel. 🤝
 
-• Promote @xDzod and @Z900_RoBot with full admin rights in your channel. 🔑
+• Promote {} with full admin rights in your channel. 🔑
 
 • Send /accept command in the channel to accept all requests at once. 💯
 </b>
