@@ -1,7 +1,8 @@
 import os
 import asyncio
 from pyrogram import Client, filters, enums
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ChatPrivileges
+from pyrogram.errors import UserAlreadyParticipant, ChatAdminRequired, UserNotParticipant
 from config import API_ID, API_HASH, BOT_TOKEN, NEW_REQ_MODE, SESSION_STRING
 
 @Client.on_message(filters.command('accept'))
@@ -16,27 +17,104 @@ async def accept(client, message):
     
     # Proceed if the command is issued in a channel
     channel_id = message.chat.id
-    show = await client.send_message(channel_id, "⏳ **Please wait...**")
+    show = await client.send_message(channel_id, "⏳ **Processing...**")
     
+    # Check if bot has required permissions
+    try:
+        bot_member = await client.get_chat_member(channel_id, "me")
+        bot_permissions = bot_member.privileges
+        
+        if not (bot_permissions.can_invite_users and bot_permissions.can_promote_members):
+            return await show.edit("📌 **I need 'Invite Users' and 'Add New Admins' permissions to work properly.**")
+    except Exception as e:
+        return await show.edit(f"❌ **Error checking bot permissions: {str(e)}**")
+    
+    # Initialize session client
     try:
         acc = Client("joinrequest", session_string=SESSION_STRING, api_hash=API_HASH, api_id=API_ID)
-        await acc.connect()
-    except:
-        return await show.edit("❌ **Login session has expired. Please update the session string and try again.**")
-    
-    # Directly accept join requests without needing a forwarded message
-    msg = await show.edit("✅ **Accepting all join requests... Please wait until it's completed.**")
-    
-    try:
-        while True:
-            await acc.approve_all_chat_join_requests(channel_id)
-            await asyncio.sleep(1)
-            join_requests = [request async for request in acc.get_chat_join_requests(channel_id)]
-            if not join_requests:
-                break
-        await msg.edit("🎉 **Successfully accepted all join requests!**")
+        await acc.start()
+        user_info = await acc.get_me()
+        user_id = user_info.id
+        username = user_info.username or user_info.first_name
     except Exception as e:
-        await msg.edit(f"⚠️ **An error occurred:** {str(e)}")
+        return await show.edit(f"❌ **Login session has expired or error occurred: {str(e)}**")
+    
+    await show.edit("⏳ **Processing...**")
+    
+    # Generate an invite link for the channel
+    try:
+        invite_link = await client.create_chat_invite_link(channel_id)
+        invite_url = invite_link.invite_link
+    except Exception as e:
+        await acc.stop()
+        return
+    
+    # Have the session account join using the invite link
+    try:
+        try:
+            # Check if already in channel
+            try:
+                await acc.get_chat_member(channel_id, user_id)
+            except UserNotParticipant:
+                await acc.join_chat(invite_url)
+                await show.edit("✅ **Inviting my assistant...**")
+        except Exception as e:
+            await acc.stop()
+            return await show.edit(f"❌ **Failed to join channel: {str(e)}**")
+    except Exception as e:
+        await acc.stop()
+        return await show.edit(f"❌ **Failed to check or join channel: {str(e)}**")
+    
+    # Promote session account to admin with required permissions
+    try:
+        await client.promote_chat_member(
+            channel_id, 
+            user_id,
+            privileges=ChatPrivileges(
+                can_invite_users=True,
+                can_manage_chat=True,
+                can_change_info=False,
+                can_delete_messages=False,
+                can_manage_video_chats=False,
+                can_restrict_members=False,
+                can_promote_members=False,
+                can_pin_messages=False,
+                can_edit_messages=False
+            )
+        )
+    except Exception as e:
+        await acc.stop()
+    
+    # Accept all join requests
+    try:
+        msg = await show.edit("**Accepting join requests... It'll take some time, plz be patient. ✨**")
+        requests_count = 0
+        
+        while True:
+            try:
+                join_requests = [request async for request in acc.get_chat_join_requests(channel_id)]
+                if not join_requests:
+                    break
+                
+                await acc.approve_all_chat_join_requests(channel_id)
+                requests_count += len(join_requests)
+                await asyncio.sleep(1)
+            except Exception as e:
+                await msg.edit(f"⚠️ **Error while accepting requests: {str(e)}**")
+                break
+    except Exception as e:
+        await msg.edit(f"⚠️ **An error occurred while accepting requests: {str(e)}**")
+    
+    # Leave the channel
+    try:
+        await asyncio.sleep(2)  # Small delay before leaving
+        await acc.leave_chat(channel_id)
+        await msg.edit(f"✅🎉 **Mission accomplished! Accepted {requests_count} join requests.**")
+    except Exception as e:
+        await msg.edit(f"✅ **Accepted {requests_count} join requests, but failed to leave the channel: {str(e)}**")
+    
+    # Stop the client session
+    await acc.stop()
 
 
 @Client.on_chat_join_request(filters.group | filters.channel)
