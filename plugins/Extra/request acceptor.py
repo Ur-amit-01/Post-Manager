@@ -11,7 +11,7 @@ async def accept(client, message):
         return await message.reply("🚫 Use this in channels only")
     
     channel_id = message.chat.id
-    show = await client.send_message(channel_id, "⏳ Processing...")
+    show = await client.send_message(channel_id, "**⏳ Processing...**")
     
     # Check bot permissions
     try:
@@ -33,14 +33,14 @@ async def accept(client, message):
         # Create invite link
         try:
             invite_url = (await client.create_chat_invite_link(channel_id)).invite_link
-            await show.edit("🔗 Inviting assistant...")
+            await show.edit("**🔗 Inviting assistant...**")
         except Exception as e:
             raise Exception(f"Invite creation failed: {str(e)}")
         
         # Join channel
         try:
             await acc.join_chat(invite_url)
-            await show.edit("🧑‍💻 Assistant joined...")
+            await show.edit("**🧑‍💻 Assistant joined...**")
         except UserAlreadyParticipant:
             pass
         except Exception as e:
@@ -56,7 +56,7 @@ async def accept(client, message):
                     can_manage_chat=True
                 )
             )
-            await show.edit("👑 Promoted assistant...")
+            await show.edit("**👑 Promoted assistant...**")
         except Exception as e:
             raise Exception(f"Promotion failed: {str(e)}")
         
@@ -77,7 +77,7 @@ async def accept(client, message):
                 
                 # Update progress every 50 requests
                 if requests_count - last_update >= 50 or not join_requests:
-                    await show.edit(f"✅ Approved {requests_count} requests...")
+                    await show.edit(f"**✅ Approved {requests_count} requests...**")
                     last_update = requests_count
                 
                 await asyncio.sleep(2)  # Rate limit protection
@@ -85,7 +85,7 @@ async def accept(client, message):
                 await show.edit(f"⚠️ Partial: {requests_count} approved\nError: {str(e)}")
                 break
         
-        await show.edit(f"🎉✅ Done! Approved {requests_count} requests")
+        await show.edit(f"**🎉 Done! Approved {requests_count} requests**")
         
     except Exception as e:
         await show.edit(f"❌ Failed: {str(e)}")
