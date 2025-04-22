@@ -1,7 +1,5 @@
 
 requests
-pymupdf==1.18.19
-PyPDF2==2.10.0
 pyrofork
 aiofiles
 Pillow
