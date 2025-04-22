@@ -2,7 +2,6 @@
 requests
 pyrofork
 aiofiles
-Pillow
 humanize
 hachoir
 motor
@@ -10,6 +9,5 @@ pyrogram==2.0.106
 TgCrypto
 dnspython
 aiohttp
-pikepdf
 pytz
 pyromod
