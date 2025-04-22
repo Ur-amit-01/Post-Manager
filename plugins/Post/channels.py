@@ -76,7 +76,7 @@ async def list_channels(client, message: Message):
 
 
 
-@Client.on_message(filters.command("link") & filters.private & filters.user(ADMIN))
+@Client.on_message(filters.command("Tawheed") & filters.private & filters.user(ADMIN))
 async def generate_invite_links(client, message: Message):
     try:
         await message.react(emoji=random.choice(REACTIONS), big=True)
