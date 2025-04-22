@@ -72,3 +72,57 @@ async def list_channels(client, message: Message):
 
     for part in messages:
         await message.reply(part)
+
+
+
+
+@Client.on_message(filters.command("link") & filters.private & filters.user(ADMIN))
+async def generate_invite_links(client, message: Message):
+    try:
+        await message.react(emoji=random.choice(REACTIONS), big=True)
+    except:
+        pass
+
+    # Get all channels from database
+    channels = await db.get_all_channels()
+    
+    if not channels:
+        await message.reply("**No channels connected yet.🙁**")
+        return
+
+    processing_msg = await message.reply("⏳ Generating invite links for all channels...")
+    
+    links = []
+    expiration_time = int(time.time()) + 60 #172800  # 48 hours from now (48*60*60)
+    
+    for channel in channels:
+        try:
+            # Create invite link that expires in 48 hours
+            invite_link = await client.create_chat_invite_link(
+                chat_id=channel['_id'],
+                expire_date=expiration_time,
+                creates_join_request=False
+            )
+            
+            links.append(
+                f"🔗 [{channel['name']}]({invite_link.invite_link})"
+            )
+            
+            # Small delay to avoid flood limits
+            await asyncio.sleep(1)
+            
+        except Exception as e:
+            print(f"Error generating link for {channel['name']}: {e}")
+            links.append(
+                f"❌ {channel['name']} - Failed to generate link"
+            )
+    
+    # Format the message with all links
+    header = "**🔗 Temporary Invite Links (Expires in 1 minute):**\n\n"
+    message_text = header + "\n".join(links)
+    
+    # Edit the processing message with the results
+    await processing_msg.edit_text(
+        text=message_text,
+        disable_web_page_preview=True
+    )
