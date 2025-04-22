@@ -83,46 +83,79 @@ async def generate_invite_links(client, message: Message):
     except:
         pass
 
-    # Get all channels from database
     channels = await db.get_all_channels()
     
     if not channels:
         await message.reply("**No channels connected yet.🙁**")
         return
 
-    processing_msg = await message.reply("⏳ Generating invite links for all channels...")
+    processing_msg = await message.reply("**⏳ Generating invite links for all channels...**")
     
+    success_count = 0
+    failed_count = 0
     links = []
-    expiration_time = int(time.time()) + 60 #172800  # 48 hours from now (48*60*60)
+    expiration_time = int(time.time()) + 3660  # 48 hours from now
     
     for channel in channels:
         try:
-            # Create invite link that expires in 48 hours
+            # First check if bot is in channel and has admin rights
+            chat = await client.get_chat(channel['_id'])
+            
+            if not chat:
+                links.append(f"**❌ {channel['name']} - Bot not in channel**")
+                failed_count += 1
+                continue
+                
+            # Check if bot has admin privileges
+            member = await client.get_chat_member(channel['_id'], "me")
+            if not member.privileges or not member.privileges.can_invite_users:
+                links.append(f"**❌ {channel['name']} - No invite permission**")
+                failed_count += 1
+                continue
+                
+            # Create invite link
             invite_link = await client.create_chat_invite_link(
                 chat_id=channel['_id'],
                 expire_date=expiration_time,
-                creates_join_request=False
+                creates_join_request=True
             )
             
-            links.append(
-                f"🔗 [{channel['name']}]({invite_link.invite_link})"
-            )
+            links.append(f"**🔗 [{channel['name']}]({invite_link.invite_link})**")
+            success_count += 1
             
-            # Small delay to avoid flood limits
-            await asyncio.sleep(1)
+            await asyncio.sleep(0.25)  # Rate limiting
             
         except Exception as e:
-            print(f"Error generating link for {channel['name']}: {e}")
-            links.append(
-                f"❌ {channel['name']} - Failed to generate link"
-            )
-    
-    # Format the message with all links
-    header = "**🔗 Temporary Invite Links (Expires in 1 minute):**\n\n"
-    message_text = header + "\n".join(links)
-    
-    # Edit the processing message with the results
-    await processing_msg.edit_text(
-        text=message_text,
-        disable_web_page_preview=True
+            error_msg = str(e).lower()
+            if "forbidden" in error_msg:
+                reason = "Bot not admin or kicked"
+            elif "chat not found" in error_msg:
+                reason = "Bot not in channel"
+            elif "not enough rights" in error_msg:
+                reason = "Missing invite permission"
+            else:
+                reason = "Unknown error"
+                
+            links.append(f"❌ {channel['name']} - {reason}")
+            failed_count += 1
+            print(f"Error in {channel['name']}: {e}")
+
+    # Format results
+    header = (
+        f"**🔗 Temporary Invite Links (Expires in 1 hour 1minute)**\n"
+        f"**✅ Success: {success_count} | ❌ Failed: {failed_count}**\n\n"
     )
+    
+    # Split long messages if needed
+    message_text = header + "\n".join(links)
+    if len(message_text) > 4096:
+        parts = [message_text[i:i+4096] for i in range(0, len(message_text), 4096)]
+        await processing_msg.delete()
+        for part in parts:
+            await message.reply(part, disable_web_page_preview=True)
+    else:
+        await processing_msg.edit_text(
+            text=message_text,
+            disable_web_page_preview=True
+        )
+        
