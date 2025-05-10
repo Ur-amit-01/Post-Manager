@@ -46,6 +46,7 @@ async def handle_message(client: Client, message: Message):
         await message.reply_text(
             "Please select your preferred quality:",
             reply_markup=InlineKeyboardMarkup(keyboard)
+        )
     elif (message.from_user.id in user_data and 
           "url" in user_data[message.from_user.id]):
         selected_quality = next(
