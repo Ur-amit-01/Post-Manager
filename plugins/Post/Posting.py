@@ -265,3 +265,139 @@ async def handle_deletion_results(client, deletion_tasks, post_id, delay_seconds
                 
     except Exception as e:
         print(f"Error in handle_deletion_results: {e}")
+
+
+
+@Client.on_message(filters.command("fpost") & filters.private & filters.user(ADMIN))
+async def forward_post(client, message: Message):
+    try:
+        await message.react(emoji=random.choice(REACTIONS), big=True)
+    except:
+        pass
+    
+    if not message.reply_to_message:
+        await message.reply("**Reply to a message to forward it.**")
+        return
+
+    delete_after = None
+    time_input = None
+    if len(message.command) > 1:
+        try:
+            time_input = ' '.join(message.command[1:]).lower()
+            delete_after = parse_time(time_input)
+            if delete_after <= 0:
+                await message.reply("❌ Time must be greater than 0")
+                return
+        except ValueError as e:
+            await message.reply(f"❌ {str(e)}\nExample: /fpost 1h 30min or /fpost 2 hours 15 minutes")
+            return
+
+    post_content = message.reply_to_message
+    channels = await db.get_all_channels()
+
+    if not channels:
+        await message.reply("**No channels connected yet.**")
+        return
+
+    post_id = int(time.time())
+    sent_messages = []
+    success_count = 0
+    total_channels = len(channels)
+
+    processing_msg = await message.reply(
+        f"**📢 Forwarding to {total_channels} channels...**",
+        reply_to_message_id=post_content.id
+    )
+
+    deletion_tasks = []
+    
+    for channel in channels:
+        try:
+            # Using forward_message instead of copy_message to preserve forward tag
+            sent_message = await client.forward_messages(
+                chat_id=channel["_id"],
+                from_chat_id=message.chat.id,
+                message_ids=post_content.id
+            )
+
+            sent_messages.append({
+                "channel_id": channel["_id"],
+                "message_id": sent_message.id,
+                "channel_name": channel.get("name", str(channel["_id"]))
+            })
+            success_count += 1
+
+            if delete_after:
+                deletion_tasks.append(
+                    schedule_deletion(
+                        client,
+                        channel["_id"],
+                        sent_message.id,
+                        delete_after,
+                        message.from_user.id,
+                        post_id,
+                        channel.get("name", str(channel["_id"])),
+                        processing_msg.id
+                    )
+                )
+                
+        except Exception as e:
+            print(f"Error forwarding to channel {channel['_id']}: {e}")
+
+    # Save post with deletion info if needed
+    post_data = {
+        "post_id": post_id,
+        "channels": sent_messages,
+        "user_id": message.from_user.id,
+        "confirmation_msg_id": processing_msg.id,
+        "created_at": time.time(),
+        "is_forward": True  # Mark as forwarded post
+    }
+    
+    if delete_after:
+        post_data["delete_after"] = time.time() + delete_after
+        post_data["delete_original"] = True
+    
+    await db.save_post(post_data)
+
+    result_msg = (
+        f"<blockquote>📣 <b>Forwarding Completed!</b></blockquote>\n\n"
+        f"• <b>Post ID:</b> <code>{post_id}</code>\n"
+        f"• <b>Success:</b> {success_count}/{total_channels} channels\n"
+    )
+    
+    if delete_after:
+        time_str = format_time(delete_after)
+        result_msg += f"• <b>Auto-delete in:</b> {time_str}\n"
+
+    if success_count < total_channels:
+        result_msg += f"• <b>Failed:</b> {total_channels - success_count} channels\n"
+
+    reply_markup = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🗑 Delete This Post", callback_data=f"delete_{post_id}")]
+    ])
+
+    await processing_msg.edit_text(result_msg, reply_markup=reply_markup)
+
+    try:
+        await client.send_message(
+            chat_id=LOG_CHANNEL,
+            text=f"📢 <blockquote><b>#FPost | @Interferons_bot</b></blockquote>\n\n"
+                 f"👤 <b>Forwarded By:</b> {message.from_user.mention}\n"
+                 f"📌 <b>Post ID:</b> <code>{post_id}</code>\n"
+                 f"📡 <b>Sent to:</b> {success_count}/{total_channels} channels\n"
+                 f"⏳ <b>Auto-delete:</b> {time_str if delete_after else 'No'}"
+        )    
+    except Exception as e:
+        print(f"Error sending confirmation to log channel: {e}")
+
+    if delete_after and deletion_tasks:
+        asyncio.create_task(
+            handle_deletion_results(
+                client=client,
+                deletion_tasks=deletion_tasks,
+                post_id=post_id,
+                delay_seconds=delete_after
+            )
+        )
+
