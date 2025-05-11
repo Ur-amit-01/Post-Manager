@@ -22,9 +22,8 @@ async def start(client, message: Message):
 
     # Welcome message
     txt = (
-        f"> **✨👋🏻 Hey {message.from_user.mention} !!**\n"
-        f"**Welcome to the PW Link Changer Bot!**\n"
-        f"**💡 Click on help to learn how to use me.**\n\n"
+        f"> **✨👋🏻 Hey {message.from_user.mention} !!**\n\n"
+        f"**Welcome to the PW Link Changer Bot! ,💡 Click on help to learn how to use me.**\n\n"
         f"> **ᴅᴇᴠᴇʟᴏᴘᴇʀ 🧑🏻‍💻 :- @xDzoddd**"
     )
     button = InlineKeyboardMarkup([
@@ -79,8 +78,8 @@ async def back_to_start(client, callback_query):
     # Reuse your existing start message logic
     txt = f"""
 > **✨👋🏻 Hey {callback_query.from_user.mention} !!**  
-**Welcome to the PW Link Changer Bot!**  
-**💡 Click on help to learn how to use me.**  
+
+**Welcome to the PW Link Changer Bot! ,💡 Click on help to learn how to use me.**  
 
 > **ᴅᴇᴠᴇʟᴏᴘᴇʀ 🧑🏻‍💻 :- @xDzoddd**
     """
