@@ -23,16 +23,13 @@ async def start(client, message: Message):
     # Welcome message
     txt = (
         f"> **✨👋🏻 Hey {message.from_user.mention} !!**\n"
-        f"**Welcome to the PW Live Link Generator Bot!**\n\n"
-        f"**I can convert PW lecture links to direct downloadable links.**\n\n"
-        f"**How to use:**\n"
-        f"**💡 Send `/amit` followed by your PW Live URL\n"
+        f"**Welcome to the PW Link Changer Bot!**\n"
+        f"**💡 Click on help to learn how to use me.**\n\n"
         f"> **ᴅᴇᴠᴇʟᴏᴘᴇʀ 🧑🏻‍💻 :- @xDzoddd**"
     )
     button = InlineKeyboardMarkup([
-        [InlineKeyboardButton('📜 ᴀʙᴏᴜᴛ', callback_data='about'), 
-         InlineKeyboardButton('🕵🏻‍♀️ ʜᴇʟᴘ', callback_data='help')],
-        [InlineKeyboardButton('🔗 Try Now', switch_inline_query_current_chat="/amit ")]
+        [InlineKeyboardButton('🕵🏻‍♀️ ʜᴇʟᴘ', callback_data='help'),
+         InlineKeyboardButton('🔗 Try Now', switch_inline_query_current_chat="/amit ")]
     ])
 
     # Send the start message with or without a picture
@@ -40,6 +37,66 @@ async def start(client, message: Message):
         await message.reply_photo(START_PIC, caption=txt, reply_markup=button)
     else:
         await message.reply_text(text=txt, reply_markup=button, disable_web_page_preview=True)
+
+
+@Client.on_callback_query(filters.regex("^help$"))
+async def help_callback(client, callback_query):
+    user = callback_query.from_user
+    
+    help_text = f"""
+**🛠️ {user.first_name}, Here's How To Use Me:**
+
+**1️⃣ Change PW Lecture Links:**
+• Send `/amit` followed by PW URL  
+• Example:  
+  `/amit https://pw.live/watch?v=abc123`  
+• Then select your preferred quality  
+
+**2️⃣ Supported Qualities:**
+• 240p | 360p | 480p | 720p  
+
+**3️⃣ Features:**
+• Instant link conversion  
+• Simple one-click process  
+
+**Need more help? Contact @xDzoddd**
+    """
+    
+    buttons = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔙 Back", callback_data="back_to_start"),
+        [InlineKeyboardButton("🚀 Try Now", switch_inline_query_current_chat="/amit ")]
+    ])
+    
+    await callback_query.message.edit_text(
+        text=help_text,
+        reply_markup=buttons,
+        disable_web_page_preview=True
+    )
+    await callback_query.answer()
+
+@Client.on_callback_query(filters.regex("^back_to_start$"))
+async def back_to_start(client, callback_query):
+    # Reuse your existing start message logic
+    txt = f"""
+> **✨👋🏻 Hey {callback_query.from_user.mention} !!**  
+**Welcome to the PW Link Changer Bot!**  
+**💡 Click on help to learn how to use me.**  
+
+> **ᴅᴇᴠᴇʟᴏᴘᴇʀ 🧑🏻‍💻 :- @xDzoddd**
+    """
+
+    buttons = InlineKeyboardMarkup([
+        [InlineKeyboardButton('🕵🏻‍♀️ ʜᴇʟᴘ', callback_data='help'),
+         InlineKeyboardButton('🔗 Try Now', switch_inline_query_current_chat="/amit ")]
+    ])
+    
+    await callback_query.message.edit_text(
+        text=txt,
+        reply_markup=buttons,
+        disable_web_page_preview=True
+    )
+    await callback_query.answer()
+
 
 @Client.on_message(filters.command("id"))
 async def id_command(client: Client, message: Message):
