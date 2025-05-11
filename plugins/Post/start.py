@@ -23,11 +23,16 @@ async def start(client, message: Message):
     # Welcome message
     txt = (
         f"> **✨👋🏻 Hey {message.from_user.mention} !!**\n"
-        f"**Welcome to the Channel Manager Bot, Manage multiple channels and post messages with ease! 😌**\n\n"
-        f"> **ᴅᴇᴠᴇʟᴏᴘᴇʀ 🧑🏻‍💻 :- @Axa_bachha**"
+        f"**Welcome to the PW Live Link Generator Bot!**\n\n"
+        f"**I can convert PW lecture links to direct downloadable links.**\n\n"
+        f"**How to use:**\n"
+        f"**💡 Send `/amit` followed by your PW Live URL\n"
+        f"> **ᴅᴇᴠᴇʟᴏᴘᴇʀ 🧑🏻‍💻 :- @xDzoddd**"
     )
     button = InlineKeyboardMarkup([
-        [InlineKeyboardButton('📜 ᴀʙᴏᴜᴛ', callback_data='about'), InlineKeyboardButton('🕵🏻‍♀️ ʜᴇʟᴘ', callback_data='help')]
+        [InlineKeyboardButton('📜 ᴀʙᴏᴜᴛ', callback_data='about'), 
+         InlineKeyboardButton('🕵🏻‍♀️ ʜᴇʟᴘ', callback_data='help')],
+        [InlineKeyboardButton('🔗 Try Now', switch_inline_query_current_chat="/amit ")]
     ])
 
     # Send the start message with or without a picture
@@ -35,7 +40,6 @@ async def start(client, message: Message):
         await message.reply_photo(START_PIC, caption=txt, reply_markup=button)
     else:
         await message.reply_text(text=txt, reply_markup=button, disable_web_page_preview=True)
-
 
 @Client.on_message(filters.command("id"))
 async def id_command(client: Client, message: Message):
