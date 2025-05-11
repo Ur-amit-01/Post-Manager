@@ -64,7 +64,7 @@ async def help_callback(client, callback_query):
     
     buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton("🔙 Back", callback_data="back_to_start"),
-        [InlineKeyboardButton("🚀 Try Now", switch_inline_query_current_chat="/amit ")]
+         InlineKeyboardButton("🚀 Try Now", switch_inline_query_current_chat="/amit ")]
     ])
     
     await callback_query.message.edit_text(
