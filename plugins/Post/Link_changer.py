@@ -30,25 +30,24 @@ def transform_pw_link(original_url, quality):
     
     return transformed_url
 
-@Client.on_message(filters.text & filters.private)
+@Client.on_message(filters.private & filters.command("amit") & filters.regex(r'pw\.live/watch'))
 async def handle_message(client: Client, message: Message):
-    text = message.text.strip()
+    url = message.text.split("/amit")[1].strip()
+    user_data[message.from_user.id] = {"url": url}
     
-    if text.startswith("/amit") and "pw.live/watch" in text:
-        url = text.replace("/amit", "").strip()
-        user_data[message.from_user.id] = {"url": url}
-        
-        keyboard = [
-            [InlineKeyboardButton(q, callback_data=q_data)]
-            for q, q_data in QUALITIES.items()
-        ]
-        
-        await message.reply_text(
-            "Please select your preferred quality:",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-    elif (message.from_user.id in user_data and 
-          "url" in user_data[message.from_user.id]):
+    keyboard = [
+        [InlineKeyboardButton(q, callback_data=q_data)]
+        for q, q_data in QUALITIES.items()
+    ]
+    
+    await message.reply_text(
+        "Please select your preferred quality:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@Client.on_message(filters.private & filters.text & ~filters.command(["start", "help"]))
+async def handle_quality_response(client: Client, message: Message):
+    if message.from_user.id in user_data and "url" in user_data[message.from_user.id]:
         selected_quality = next(
             (q for q in QUALITIES.keys() 
              if q.lower() in message.text.lower()),
@@ -77,4 +76,3 @@ async def handle_callback_query(client, callback_query):
         del user_data[user_id]
     
     await callback_query.answer()
-
