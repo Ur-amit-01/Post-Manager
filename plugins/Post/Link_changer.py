@@ -1,8 +1,7 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from urllib.parse import urlparse, parse_qs
-import config
-
+import config  # config.py with API_ID, API_HASH, BOT_TOKEN, and TOKEN
 
 QUALITIES = {
     "240p": "240",
@@ -14,6 +13,7 @@ QUALITIES = {
 user_data = {}
 
 def transform_pw_link(original_url, quality):
+    """Transform the PW Live link with selected quality"""
     parsed_url = urlparse(original_url)
     query_params = parse_qs(parsed_url.query)
     
@@ -30,24 +30,35 @@ def transform_pw_link(original_url, quality):
     
     return transformed_url
 
-@Client.on_message(filters.private & filters.command("amit") & filters.regex(r'pw\.live/watch'))
+@Client.on_message(filters.text & ~filters.command(["start"]))  # Ignore /start command
 async def handle_message(client: Client, message: Message):
-    url = message.text.split("/amit")[1].strip()
-    user_data[message.from_user.id] = {"url": url}
+    text = message.text.strip()
     
-    keyboard = [
-        [InlineKeyboardButton(q, callback_data=q_data)]
-        for q, q_data in QUALITIES.items()
-    ]
+    # Check if message starts with /amit and contains pw.live link
+    if text.startswith("/amit") and "pw.live/watch" in text:
+        # Extract the actual URL (remove /amit prefix)
+        url = text.replace("/amit", "").strip()
+        
+        # Store the URL for this user
+        user_data[message.from_user.id] = {"url": url}
+        
+        # Create quality selection buttons
+        keyboard = [
+            [InlineKeyboardButton(q, callback_data=q_data)]
+            for q, q_data in QUALITIES.items()
+        ]
+        
+        await message.reply_text(
+            "Please select your preferred quality:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
     
-    await message.reply_text(
-        "Please select your preferred quality:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-
-@Client.on_message(filters.private & filters.text & ~filters.command(["start", "help"]))
-async def handle_quality_response(client: Client, message: Message):
-    if message.from_user.id in user_data and "url" in user_data[message.from_user.id]:
+    # Handle quality selection via text
+    elif (message.from_user.id in user_data and 
+          "url" in user_data[message.from_user.id] and
+          any(q.lower() in message.text.lower() for q in QUALITIES.keys())):
+        
+        # Find which quality was selected
         selected_quality = next(
             (q for q in QUALITIES.keys() 
              if q.lower() in message.text.lower()),
@@ -60,16 +71,18 @@ async def handle_quality_response(client: Client, message: Message):
                 user_data[message.from_user.id]["url"],
                 quality
             )
-            await message.reply_text(f"Here's your {selected_quality} link:\n\n{transformed_url}")
+            await message.reply_text(f"Here's your {selected_quality} link 🖇️:\n\n`{transformed_url}`")
             del user_data[message.from_user.id]
 
 @Client.on_callback_query()
 async def handle_callback_query(client, callback_query):
+    """Handle quality selection from inline buttons"""
     user_id = callback_query.from_user.id
     quality = callback_query.data
     
     if user_id in user_data and "url" in user_data[user_id]:
         transformed_url = transform_pw_link(user_data[user_id]["url"], quality)
+        
         await callback_query.message.edit_text(
             f"Here's your {quality}p link:\n\n{transformed_url}"
         )
