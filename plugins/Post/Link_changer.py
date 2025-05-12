@@ -129,7 +129,7 @@ async def handle_callback(client, callback):
     
     if user_id in user_data and "url" in user_data[user_id]:
         transformed_url = transform_pw_link(user_data[user_id]["url"], callback.data)
-        asyncio.create_task(log_to_channel(client, "Link converted", {
+        asyncio.create_task(log_to_channel(client, "#Link_converted", {
             "user": {
                 "id": user_id,
                 "first_name": callback.from_user.first_name
