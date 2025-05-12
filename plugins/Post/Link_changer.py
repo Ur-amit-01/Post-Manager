@@ -23,7 +23,7 @@ async def log_to_channel(client: Client, action: str, details: dict):
         user = details.get('user', {})
         log_message = (
             f"> **{action}**\n\n"
-            f"**🥷:- [{user.get('first_name', 'User')}](tg://user?id={user.get('id', '')})**"
+            f"**🥷:- [{user.get('first_name', 'User')}](tg://user?id={user.get('id', '')})\n**"
             f"**🪪:- `{user.get('id', '')}`**\n"
         )
         
