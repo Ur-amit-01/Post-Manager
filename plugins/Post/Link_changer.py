@@ -12,7 +12,7 @@ QUALITIES = {
 }
 
 # MongoDB setup
-mongo_client = MongoClient(config.MONGO_URI)
+mongo_client = MongoClient(config.DB_URL)
 db = mongo_client["stream_bot"]
 tokens_collection = db["tokens"]
 
