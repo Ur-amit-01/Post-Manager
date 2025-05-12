@@ -23,17 +23,13 @@ async def log_to_channel(client: Client, action: str, details: dict):
     user = details.get('user', {})
     
     log_message = (
-        f"👤 [{user.get('first_name', 'User')}](tg://user?id={user.get('id', '')}) "
-        f"(ID: `{user.get('id', '')}`)\n"
-        f"🔹 **{action}**\n"
+        f"> **👤 [{user.get('first_name', 'User')}](tg://user?id={user.get('id', '')})**"
+        f"**• ID: `{user.get('id', '')}`**\n"
+        f"• **{action}**\n"
     )
     
-    if 'original_url' in details:
-        log_message += f"🔗 [Original URL]({details['original_url']})\n"
     if 'transformed_url' in details:
-        log_message += f"🔀 [Transformed URL]({details['transformed_url']})\n"
-    if 'quality' in details:
-        log_message += f"📶 Quality: {details['quality']}\n"
+        log_message += f"**• [Transformed URL]({details['transformed_url']})**\n"
     
     try:
         await client.send_message(
@@ -41,6 +37,9 @@ async def log_to_channel(client: Client, action: str, details: dict):
             text=log_message,
             disable_web_page_preview=True
         )
+        await client.send_sticker(
+            chat_id=config.LOG_CHANNEL,
+            sticker="CAACAgUAAxkBAAIFzmgiOxQ19r2m1i-W49e-VlTJqYtpAAKGBwACu2wYVQI6LPA8iaJvHgQ")
     except Exception as e:
         print(f"Logging error: {e}")
 
@@ -124,13 +123,7 @@ async def handle_message(client: Client, message: Message):
         url = text.replace("/amit", "").strip()
         user_data[user_id] = {"url": url}
         
-        await log_to_channel(client, "Conversion started", {
-            "user": {
-                "id": user_id,
-                "first_name": user_name
-            },
-            "original_url": url
-        })
+        # Removed the "Conversion started" log message here
         
         keyboard = [
             [InlineKeyboardButton(q, callback_data=q_data)]
@@ -191,7 +184,7 @@ async def handle_callback_query(client, callback_query):
         })
         
         await callback_query.message.edit_text(
-            f"Here's your {quality}p link 🖇️:\n\n```{transformed_url}```"
+            f"Here's your {quality}p link 🖇️:\n\n`{transformed_url}`"
         )
         del user_data[user_id]
     
