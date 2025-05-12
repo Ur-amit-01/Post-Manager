@@ -74,7 +74,7 @@ async def set_token(client: Client, message: Message):
     )
     user_data[message.from_user.id] = {"awaiting_token": True}
 
-@Client.on_message(filters.text & ~filters.command(["start", "token"]))
+@Client.on_message(filters.text & ~filters.command(["start", "token", "users", "broadcast"]))
 async def handle_text(client: Client, message: Message):
     text = message.text.strip()
     user_id = message.from_user.id
