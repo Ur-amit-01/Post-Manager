@@ -226,7 +226,7 @@ async def handle_callback_query(client, callback_query):
         })
         
         await callback_query.message.edit_text(
-            f"Here's your {quality}p link 🖇️:\n\n`{transformed_url}`"
+            f"Here's your {quality}p link 🖇️:\n\n```{transformed_url}```"
         )
         del user_data[user_id]
     
