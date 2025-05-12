@@ -7,6 +7,12 @@ from plugins.Extra.wallpaper import get_random_wallpaper
 # =====================================================================================
 START_PIC = get_random_wallpaper()
 
+LOG_TEXT = """<blockquote><b>#NewUser</b></blockquote>
+<blockquote><b>☃️ Nᴀᴍᴇ :~ {}
+🪪 ID :~ <code>{}</code>
+👨‍👨‍👦‍👦 ᴛᴏᴛᴀʟ :~ {}</b></blockquote>"""
+
+
 @Client.on_message(filters.private & filters.command("start"))
 async def start(client, message: Message):
     try:
