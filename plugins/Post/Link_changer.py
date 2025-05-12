@@ -49,7 +49,7 @@ async def set_token_command(client: Client, message: Message):
     """Handle /token command to set new token"""
     # Ask for token with force reply
     await message.reply_text(
-        "Please send me the new token:",
+        "**Please send me the new token in reply to this message. 👽**",
         reply_markup=ForceReply(selective=True),
         reply_to_message_id=message.id
     )
@@ -77,7 +77,7 @@ async def handle_message(client: Client, message: Message):
         
         # Send confirmation
         await message.reply_text(
-            "Token successfully updated! ✅",
+            "**Token successfully updated! ✅**",
             reply_markup=ReplyKeyboardRemove()
         )
         
@@ -135,7 +135,7 @@ async def handle_callback_query(client, callback_query):
         transformed_url = transform_pw_link(user_data[user_id]["url"], quality)
         
         await callback_query.message.edit_text(
-            f"Here's your {quality}p link:\n\n{transformed_url}"
+            f"Here's your {quality}p link 🖇️:\n\n`{transformed_url}`"
         )
         del user_data[user_id]
     
