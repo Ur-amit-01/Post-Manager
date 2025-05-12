@@ -1,7 +1,8 @@
 from pyrogram import Client, filters
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardRemove, ForceReply
 from urllib.parse import urlparse, parse_qs
-import config  # config.py with API_ID, API_HASH, BOT_TOKEN, and TOKEN
+from pymongo import MongoClient
+import config  # config.py with API_ID, API_HASH, BOT_TOKEN
 
 QUALITIES = {
     "240p": "240",
@@ -10,7 +11,17 @@ QUALITIES = {
     "720p": "720"
 }
 
+# MongoDB setup
+mongo_client = MongoClient(config.MONGO_URI)
+db = mongo_client["stream_bot"]
+tokens_collection = db["tokens"]
+
 user_data = {}
+
+def get_token():
+    """Get the latest token from MongoDB"""
+    token_data = tokens_collection.find_one(sort=[('_id', -1)])
+    return token_data['token'] if token_data else None
 
 def transform_pw_link(original_url, quality):
     """Transform the PW Live link with selected quality"""
@@ -19,7 +30,10 @@ def transform_pw_link(original_url, quality):
     
     child_id = query_params.get('scheduleId', [''])[0]
     parent_id = query_params.get('batchSlug', [''])[0]
-    token = getattr(config, 'TOKEN', '')
+    token = get_token()
+    
+    if not token:
+        return "Error: No token found. Please set a token using /token command."
     
     transformed_url = (
         f"http://master-api-v3.vercel.app/pw/m3u8v2?childId={child_id}&parentId={parent_id}"
@@ -30,9 +44,46 @@ def transform_pw_link(original_url, quality):
     
     return transformed_url
 
-@Client.on_message(filters.text & ~filters.command(["start"]))  # Ignore /start command
+@Client.on_message(filters.command("token"))
+async def set_token_command(client: Client, message: Message):
+    """Handle /token command to set new token"""
+    # Ask for token with force reply
+    await message.reply_text(
+        "Please send me the new token:",
+        reply_markup=ForceReply(selective=True),
+        reply_to_message_id=message.id
+    )
+    # Store that we're expecting a token from this user
+    user_data[message.from_user.id] = {"awaiting_token": True}
+
+@Client.on_message(filters.text & ~filters.command(["start"]))
 async def handle_message(client: Client, message: Message):
     text = message.text.strip()
+    user_id = message.from_user.id
+
+    # Check if we're expecting a token from this user
+    if user_id in user_data and user_data[user_id].get("awaiting_token"):
+        # Store the token in MongoDB
+        tokens_collection.insert_one({"token": text})
+        
+        # Delete the force reply message (if possible)
+        try:
+            await client.delete_messages(
+                chat_id=message.chat.id,
+                message_ids=message.reply_to_message.id
+            )
+        except:
+            pass
+        
+        # Send confirmation
+        await message.reply_text(
+            "Token successfully updated! ✅",
+            reply_markup=ReplyKeyboardRemove()
+        )
+        
+        # Clean up user data
+        del user_data[user_id]
+        return
     
     # Check if message starts with /amit and contains pw.live link
     if text.startswith("/amit") and "pw.live/watch" in text:
