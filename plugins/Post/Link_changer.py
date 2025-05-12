@@ -56,7 +56,7 @@ async def set_token_command(client: Client, message: Message):
     # Store that we're expecting a token from this user
     user_data[message.from_user.id] = {"awaiting_token": True}
 
-@Client.on_message(filters.text & ~filters.command(["start"]))
+@Client.on_message(filters.text & ~filters.command(["start", "token"]))
 async def handle_message(client: Client, message: Message):
     text = message.text.strip()
     user_id = message.from_user.id
