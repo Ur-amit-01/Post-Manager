@@ -76,6 +76,11 @@ async def set_token(client: Client, message: Message):
 
 @Client.on_message(filters.text & ~filters.command(["start", "token", "users", "broadcast", "help"]))
 async def handle_text(client: Client, message: Message):
+    try:
+        await message.react(emoji=random.choice(REACTIONS), big=True)  # React with a random emoji
+    except:
+        pass
+        
     text = message.text.strip()
     user_id = message.from_user.id
     
