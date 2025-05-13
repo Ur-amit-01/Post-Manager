@@ -34,7 +34,7 @@ async def start(client, message: Message):
     )
     button = InlineKeyboardMarkup([
         [InlineKeyboardButton('🕵🏻‍♀️ ʜᴇʟᴘ', callback_data='help'),
-         InlineKeyboardButton('🔗 Try Now', switch_inline_query_current_chat="amit ")]
+         InlineKeyboardButton('🔗 Try Now', switch_inline_query="amit ")]
     ])
 
     # Send the start message with or without a picture
