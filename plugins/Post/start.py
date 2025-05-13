@@ -49,7 +49,7 @@ async def help_callback(client, callback_query):
     user = callback_query.from_user
     
     help_text = f"""
-**🛠️ {user.first_name}, Here's How To Use Me:**
+> **🛠️ Help Section:**
 
 **1️⃣ Change PW Lecture Links:**
 • Send /amit followed by PW URL  
