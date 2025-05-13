@@ -4,6 +4,7 @@ from urllib.parse import urlparse, parse_qs
 from pymongo import MongoClient
 import config
 import asyncio
+import random
 
 QUALITIES = {
     "240p": "240",
@@ -16,6 +17,9 @@ QUALITIES = {
 db = MongoClient(config.DB_URL).get_database("stream_bot")
 tokens_collection = db.tokens
 user_data = {}
+
+# Example reactions (you can customize these)
+SUCCESS_REACTIONS = ["👍", "🔥", "🚀", "🎯", "✅"]
 
 async def log_to_channel(client: Client, action: str, details: dict):
     """Background logging with sticker"""
@@ -74,37 +78,25 @@ async def set_token(client: Client, message: Message):
     )
     user_data[message.from_user.id] = {"awaiting_token": True}
 
-@Client.on_message(filters.text & ~filters.command(["start", "token", "users", "broadcast", "help"]))
-async def handle_text(client: Client, message: Message):
-    try:
-        await message.react(emoji=random.choice(REACTIONS), big=True)  # React with a random emoji
-    except:
-        pass
-        
+@Client.on_message(filters.command("amit"))
+async def handle_amit_command(client: Client, message: Message):
+    """Handle /amit command"""
     text = message.text.strip()
     user_id = message.from_user.id
     
-    # Handle token update
-    if user_id in user_data and user_data[user_id].get("awaiting_token"):
-        tokens_collection.insert_one({"token": text})
-        asyncio.create_task(log_to_channel(client, "#Token_updated", {
-            "user": {
-                "id": user_id,
-                "first_name": message.from_user.first_name
-            }
-        }))
-        
-        try:
-            await client.delete_messages(message.chat.id, message.reply_to_message.id)
-        except:
-            pass
-        
-        await message.reply_text("**Token successfully updated! ✅**", reply_markup=ReplyKeyboardRemove())
-        del user_data[user_id]
+    # If only /amit is sent
+    if text == "/amit":
+        example_text = (
+            "**Please send a PW Live link with the /amit command.**\n\n"
+            "**Example:**\n"
+            "`/amit https://pw.live/watch?v=abc123&batchSlug=def456&scheduleId=ghi789`\n\n"
+            "After sending this, I'll ask you to select your preferred quality."
+        )
+        await message.reply_text(example_text)
         return
     
-    # Handle link conversion
-    if text.startswith("/amit") and "pw.live/watch" in text:
+    # If /amit with URL is sent
+    if "pw.live/watch" in text:
         user_data[user_id] = {"url": text.replace("/amit", "").strip()}
         await message.reply_text(
             "Please select your preferred quality:",
@@ -113,19 +105,6 @@ async def handle_text(client: Client, message: Message):
                 for q, q_data in QUALITIES.items()
             ])
         )
-    elif user_id in user_data and "url" in user_data[user_id]:
-        if quality := next((q for q in QUALITIES if q.lower() in text.lower()), None):
-            transformed_url = transform_pw_link(user_data[user_id]["url"], QUALITIES[quality])
-            asyncio.create_task(log_to_channel(client, "#Link_converted", {
-                "user": {
-                    "id": user_id,
-                    "first_name": message.from_user.first_name
-                },
-                "transformed_url": transformed_url,
-                "quality": quality
-            }))
-            await message.reply_text(f"Here's your {quality} link 🖇️:\n\n```{transformed_url}```")
-            del user_data[user_id]
 
 @Client.on_callback_query()
 async def handle_callback(client, callback):
@@ -143,7 +122,17 @@ async def handle_callback(client, callback):
             "quality": f"{callback.data}p"
         }))
         
-        await callback.message.edit_text(f"Here's your {callback.data}p link 🖇️:\n\n`{transformed_url}` \n\n> **Click on link to copy ☝🏻🖇️**")
+        # Send the transformed URL
+        msg = await callback.message.edit_text(
+            f"Here's your {callback.data}p link 🖇️:\n\n`{transformed_url}` \n\n> **Click on link to copy ☝🏻🖇️**"
+        )
+        
+        # Add a random reaction to the message
+        try:
+            await msg.react(emoji=random.choice(SUCCESS_REACTIONS), big=True)
+        except Exception as e:
+            print(f"Error adding reaction: {e}")
+        
         del user_data[user_id]
     
     await callback.answer()
