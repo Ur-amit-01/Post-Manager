@@ -87,8 +87,8 @@ async def handle_amit_command(client: Client, message: Message):
     # If only /amit is sent
     if text == "/amit":
         example_text = (
-            "> **Send links in this format 👇🏻**\n"
-            "```/amit https://pw.live/watch?v=abc123&bat```"
+            "> **Send links in this format 👇🏻**\n\n"
+            "/amit https://pw.live/watch?v=abc123&bat"
         )
         await message.reply_text(example_text)
         return
@@ -122,7 +122,7 @@ async def handle_callback(client, callback):
         
         # Send the transformed URL
         msg = await callback.message.edit_text(
-            f"> **Here's your {callback.data}p link 🖇️:**\n\n```{transformed_url}``` \n\n> **Click on link to copy ☝🏻🖇️**"
+            f"> **Here's your {callback.data}p link 🖇️:**\n\n`{transformed_url}` \n\n> **Click on link to copy ☝🏻🖇️**"
         )
         
         # Add a random reaction to the message
