@@ -34,7 +34,7 @@ async def start(client, message: Message):
     )
     button = InlineKeyboardMarkup([
         [InlineKeyboardButton('🕵🏻‍♀️ ʜᴇʟᴘ', callback_data='help'),
-         InlineKeyboardButton('🔗 Try Now', switch_inline_query_current_chat="/amit ")]
+         InlineKeyboardButton('🔗 Try Now', switch_inline_query_current_chat="amit ")]
     ])
 
     # Send the start message with or without a picture
@@ -65,14 +65,18 @@ async def help_callback(client, callback_query):
     
     buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton("🔙 Back", callback_data="back_to_start"),
-         InlineKeyboardButton("🚀 Try Now", switch_inline_query_current_chat="/amit ")]
+         InlineKeyboardButton("🚀 Try Now", switch_inline_query_current_chat="amit ")]
     ])
     
-    await callback_query.message.edit_text(
-        text=help_text,
-        reply_markup=buttons,
-        disable_web_page_preview=True
-    )
+    try:
+        await callback_query.message.edit_text(
+            text=help_text,
+            reply_markup=buttons,
+            disable_web_page_preview=True
+        )
+    except Exception as e:
+        print(f"Error editing message: {e}")
+    
     await callback_query.answer()
 
 @Client.on_callback_query(filters.regex("^back_to_start$"))
@@ -88,7 +92,7 @@ async def back_to_start(client, callback_query):
 
     buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton('🕵🏻‍♀️ ʜᴇʟᴘ', callback_data='help'),
-         InlineKeyboardButton('🔗 Try Now', switch_inline_query_current_chat="/amit ")]
+         InlineKeyboardButton('🔗 Try Now', switch_inline_query_current_chat="amit ")]
     ])
     
     await callback_query.message.edit_text(
