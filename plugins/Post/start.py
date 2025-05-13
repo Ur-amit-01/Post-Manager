@@ -52,17 +52,13 @@ async def help_callback(client, callback_query):
 **🛠️ {user.first_name}, Here's How To Use Me:**
 
 **1️⃣ Change PW Lecture Links:**
-• Send `/amit` followed by PW URL  
+• Send /amit followed by PW URL  
 • Example:  
-  `/amit https://pw.live/watch?v=abc123`  
+  ```/amit https://pw.live/watch?v=abc123```  
 • Then select your preferred quality  
 
 **2️⃣ Supported Qualities:**
 • 240p | 360p | 480p | 720p  
-
-**3️⃣ Features:**
-• Instant link conversion  
-• Simple one-click process  
 
 **Need more help? Contact @xDzoddd**
     """
