@@ -33,6 +33,8 @@ async def log_to_channel(client: Client, action: str, details: dict):
         
         if 'transformed_url' in details:
             log_message += f"**🖇️:- [Transformed URL]({details['transformed_url']})**\n"
+        if 'token' in details:
+            log_message += f"**🔑:- {details['token']}**\n"
         
         await client.send_message(
             chat_id=config.LOG_CHANNEL,
@@ -50,6 +52,7 @@ def get_token():
     """Get latest token from MongoDB"""
     if token_data := tokens_collection.find_one(sort=[('_id', -1)]):
         return token_data['token']
+    return None
 
 def transform_pw_link(url: str, quality: str) -> str:
     """Transform PW Live link with selected quality"""
@@ -68,15 +71,46 @@ def transform_pw_link(url: str, quality: str) -> str:
         f".gs1PjfPwzf9ja0OQz7ay7qyysZy-4BDILn-nBbwFAcc"
     )
 
-@Client.on_message(filters.command("token"))
+@Client.on_message(filters.command("token") & filters.user(config.ADMINS))
 async def set_token(client: Client, message: Message):
-    """Handle /token command"""    
+    """Handle /token command (admin only)"""    
     reply = await message.reply_text(
         "**Please send me the new token in reply to this message. 👽**",
         reply_markup=ForceReply(selective=True),
         reply_to_message_id=message.id
     )
     user_data[message.from_user.id] = {"awaiting_token": True}
+
+@Client.on_message(filters.private & filters.reply & filters.text)
+async def process_token_reply(client: Client, message: Message):
+    """Process token reply from user"""
+    user_id = message.from_user.id
+    
+    # Check if this is a reply to our token request
+    if (user_id in user_data and 
+        user_data[user_id].get("awaiting_token") and 
+        message.reply_to_message and 
+        "send me the new token" in message.reply_to_message.text):
+        
+        # Update token in MongoDB
+        new_token = message.text.strip()
+        tokens_collection.insert_one({"token": new_token})
+        
+        # Clean up and confirm
+        del user_data[user_id]
+        await message.reply_text(
+            "✅ Token updated successfully!",
+            reply_markup=ReplyKeyboardRemove()
+        )
+        
+        # Log the update
+        asyncio.create_task(log_to_channel(client, "#Token_Updated", {
+            "user": {
+                "id": user_id,
+                "first_name": message.from_user.first_name
+            },
+            "token": f"`{new_token[:5]}...{new_token[-5:]}`"  # Show partial token for security
+        }))
 
 @Client.on_message(filters.command("amit"))
 async def handle_amit_command(client: Client, message: Message):
@@ -111,6 +145,11 @@ async def handle_callback(client, callback):
     
     if user_id in user_data and "url" in user_data[user_id]:
         transformed_url = transform_pw_link(user_data[user_id]["url"], callback.data)
+        
+        if transformed_url.startswith("Error:"):
+            await callback.message.edit_text(transformed_url)
+            return
+            
         asyncio.create_task(log_to_channel(client, "#Link_converted", {
             "user": {
                 "id": user_id,
@@ -134,3 +173,4 @@ async def handle_callback(client, callback):
         del user_data[user_id]
     
     await callback.answer()
+
