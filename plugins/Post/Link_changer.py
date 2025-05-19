@@ -71,7 +71,7 @@ def transform_pw_link(url: str, quality: str) -> str:
         f".gs1PjfPwzf9ja0OQz7ay7qyysZy-4BDILn-nBbwFAcc"
     )
 
-@Client.on_message(filters.command("token") & filters.user(config.ADMINS))
+@Client.on_message(filters.command("token") & filters.user(config.ADMIN))
 async def set_token(client: Client, message: Message):
     """Handle /token command (admin only)"""    
     reply = await message.reply_text(
