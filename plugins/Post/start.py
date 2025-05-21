@@ -4,6 +4,10 @@ from config import *
 from plugins.helper.db import db
 import random
 from plugins.Extra.wallpaper import get_random_wallpaper
+import logging
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 # =====================================================================================
 START_PIC = get_random_wallpaper()
 
