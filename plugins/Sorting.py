@@ -1,9 +1,10 @@
+
 import os
 import re
 from pyrogram import Client, filters
 from pyrogram.types import Message
 from config import *
-from plugins.Chapters import CHAPTER_DATA
+from chapters import CHAPTER_DATA
 
 # Channel IDs
 SOURCE_CHANNEL = -1002027394591  # Main channel to monitor
@@ -19,13 +20,27 @@ DESTINATION_CHANNELS = {
 def find_matching_subject(text):
     """Identify which subject the message belongs to based on chapter keywords"""
     text_lower = text.lower()
+    text_words = set(re.findall(r'\w{4,}', text_lower))  # Get all words with 4+ chars
+    
+    best_match = None
+    best_score = 0
+    
     for subject, chapters in CHAPTER_DATA.items():
         for chapter in chapters:
-            # Split chapter into words and check if any word matches
-            words = re.split(r'\W+', chapter.lower())
-            if any(word in text_lower for word in words if len(word) > 3):  # Only consider words longer than 3 chars
-                return subject
-    return None
+            # Get all meaningful words from chapter name (4+ chars)
+            chapter_words = set(re.findall(r'\w{4,}', chapter.lower()))
+            
+            # Count how many chapter words appear in message
+            matches = len(chapter_words & text_words)
+            
+            # Require at least 2 matching words (or 1 if chapter has only 1 word)
+            min_required = min(2, len(chapter_words))
+            
+            if matches >= min_required and matches > best_score:
+                best_score = matches
+                best_match = subject
+    
+    return best_match
 
 @Client.on_message(filters.chat(SOURCE_CHANNEL))
 async def sort_content(client: Client, message: Message):
@@ -67,9 +82,8 @@ async def sort_content(client: Client, message: Message):
                         caption=message.caption,
                         caption_entities=message.caption_entities
                     )
-                # Add more media types as needed
                 
-                print(f"Copied message to {subject} channel")
+                print(f"Copied message to {subject} channel (matched {best_score} words)")
             except Exception as e:
                 print(f"Error copying message: {e}")
         else:
