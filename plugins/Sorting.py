@@ -4,7 +4,7 @@ import re
 from pyrogram import Client, filters
 from pyrogram.types import Message
 from config import *
-from chapters import CHAPTER_DATA
+from Chapters import CHAPTER_DATA
 
 # Channel IDs
 SOURCE_CHANNEL = -1002027394591  # Main channel to monitor
