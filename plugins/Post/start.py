@@ -13,38 +13,47 @@ LOG_TEXT = """<blockquote><b>#NewUser</b></blockquote>
 👨‍👨‍👦‍👦 ᴛᴏᴛᴀʟ :~ {}</b></blockquote>"""
 
 
-@Client.on_message(filters.private & filters.command("start"))
-async def start(client, message: Message):
-    try:
-        await message.react(emoji=random.choice(REACTIONS), big=True)  # React with a random emoji
-    except:
-        pass
+@Client.on_message(filters.command("start"))
+async def start_command(client: Client, message: Message):
+    """Handle /start command"""
+    logger.info(f"Start command from {message.from_user.id}")
+    await message.reply(
+        "🤖 **Welcome to Channel Sorter Bot!**\n\n"
+        "I can automatically organize content from your channels into subject-specific channels.\n\n"
+        "**Available Commands:**\n"
+        "/newbatch - Create a new sorting setup\n"
+        "/mybatches - List your existing batches\n"
+        "/help - Get assistance\n\n"
+        "To begin, use /newbatch to create your first automatic sorting setup!",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("🚀 Create New Batch", callback_data="newbatch")],
+            [InlineKeyboardButton("🆘 Help", callback_data="help")]
+        ])
+    )
 
-    # Add user to the database if they don't exist
-    if not await db.is_user_exist(message.from_user.id):
-        await db.add_user(message.from_user.id)
-        total_users = await db.total_users_count()
-        await client.send_message(LOG_CHANNEL, LOG_TEXT.format(message.from_user.mention, message.from_user.id, total_users))
-
-    # Welcome message
-    txt = (
-        f"> **✨👋🏻 Hey {message.from_user.mention} !!**\n"
-        f"**Welcome to the PW Link Changer Bot! ,I can transform PW lecture links into direct downloadable URLs.**\n\n"
-        f"**🚀 How to Use:**\n"
-        f"> **Send links in this format 👇🏻\n**"
-        f"> **/amit https://pw.live/watch?v=abc123&bat\n\n**"
-        f"> **ᴅᴇᴠᴇʟᴏᴘᴇʀ 🧑🏻‍💻 :- @xDzoddd**"
-    )   
-    buttons = InlineKeyboardMarkup([
-        [InlineKeyboardButton('Powered by Team SAT ✨', url='https://t.me/Team_Sat_25')]
-    ])
-
-    # Send the start message with or without a picture
-    if START_PIC:
-        await message.reply_photo(START_PIC, caption=txt, reply_markup=button)
-    else:
-        await message.reply_text(text=txt, reply_markup=button, disable_web_page_preview=True)
-
+@Client.on_message(filters.command("help"))
+async def help_command(client: Client, message: Message):
+    """Handle /help command"""
+    logger.info(f"Help command from {message.from_user.id}")
+    await message.reply(
+        "🆘 **Channel Sorter Bot Help**\n\n"
+        "**How It Works:**\n"
+        "1. Create a batch with /newbatch\n"
+        "2. Set up your main content channel\n"
+        "3. Configure subject channels\n"
+        "4. The bot will automatically sort content\n\n"
+        "**Commands:**\n"
+        "/start - Show welcome message\n"
+        "/newbatch - Create new sorting setup\n"
+        "/mybatches - List your batches\n"
+        "/help - Show this message\n\n"
+        "Need more help? Contact support!",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("🚀 Create New Batch", callback_data="newbatch")],
+            [InlineKeyboardButton("🏠 Main Menu", callback_data="start")]
+        ])
+    )
+    
 
 
 @Client.on_message(filters.command("id"))
