@@ -3,8 +3,7 @@ import logging.config
 from pyrogram import Client 
 from config import *
 from aiohttp import web
-from plugins.Extra.web_support import web_server
-from plugins.Post.Posting import restore_pending_deletions  # Import your existing function
+from plugins.Extra.web_support import web_server  # Import your existing function
 
 logging.config.fileConfig('logging.conf')
 logging.getLogger().setLevel(logging.INFO)
@@ -31,13 +30,8 @@ class Bot(Client):
         self.username = me.username
         
         # Start web server
-
-        
-        # Restore pending deletions using your existing function
-        await restore_pending_deletions(self)
         
         logging.info(f"{me.first_name} ✅✅ BOT started successfully ✅✅")
-        logging.info(f"{me.first_name} Pending deletions restored successfully.")
 
     async def stop(self, *args):
         await super().stop()      
