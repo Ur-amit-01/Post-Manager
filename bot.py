@@ -87,7 +87,7 @@ class Bot(Client):
         logging.info(f"{self.username} Bot Stopped 🙄")
 
 # Client handlers
-@Bot.on_message(filters.private & filters.command("forward"))
+@Client.on_message(filters.private & filters.command("forward"))
 async def handle_forward_command(client: Bot, message: Message):
     """Handle /forward command in DM"""
     if message.from_user.id != 2031106491:  # Replace with your user ID
