@@ -1,6 +1,7 @@
 import re
 from typing import Dict, Set, Optional
 from fuzzywuzzy import fuzz, process
+from plugins.Chapters import CHAPTER_DATA
 
 class ContentMatcher:
     def __init__(self):
