@@ -74,7 +74,7 @@ async def forward_messages(client: Client, messages: list):
 @Client.on_message(filters.private & filters.command("forward"))
 async def handle_forward_command(client: Client, message: Message):
     """Handle /forward command in DM"""
-    if message.from_user.id != YOUR_USER_ID:  # Replace with your user ID
+    if message.from_user.id != 2031106491:  # Replace with your user ID
         return await message.reply("❌ You're not authorized to use this command.")
     
     if forwarding_active:
@@ -92,27 +92,3 @@ async def handle_forward_command(client: Client, message: Message):
     await message.reply(f"✅ Successfully forwarded {total_forwarded} messages!")
     print(f"Last forwarded message ID is now: {last_forwarded_id}")
 
-# Optional: Save/load last_forwarded_id to persist across restarts
-"""async def save_last_id():
-    """Save last forwarded ID to file"""
-    with open("last_id.txt", "w") as f:
-        f.write(str(last_forwarded_id))
-
-async def load_last_id():
-    """Load last forwarded ID from file"""
-    global last_forwarded_id
-    try:
-        with open("last_id.txt", "r") as f:
-            last_forwarded_id = int(f.read())
-    except (FileNotFoundError, ValueError):
-        last_forwarded_id = 0
-
-# Load last ID when starting
-async def startup():
-    await load_last_id()
-    print(f"Loaded last forwarded ID: {last_forwarded_id}")
-
-# Run startup when bot initializes
-if __name__ == "__main__":
-    app = Client("my_bot")
-    app.run(startup())"""
