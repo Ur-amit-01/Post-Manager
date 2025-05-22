@@ -39,5 +39,5 @@ class Bot(Client):
         logging.info("{me.first_name} Bot Stopped 🙄")
 
 bot = Bot()
-asyncio.create_task(daily_summary(app))
+asyncio.create_task(check_queue_status())
 bot.run()
