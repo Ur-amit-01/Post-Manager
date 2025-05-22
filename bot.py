@@ -4,6 +4,7 @@ from pyrogram import Client
 from config import *
 from aiohttp import web
 from plugins.Extra.web_support import web_server  # Import your existing function
+from plugins.functions import *
 
 logging.config.fileConfig('logging.conf')
 logging.getLogger().setLevel(logging.INFO)
@@ -38,4 +39,5 @@ class Bot(Client):
         logging.info("{me.first_name} Bot Stopped 🙄")
 
 bot = Bot()
+asyncio.create_task(daily_summary(app))
 bot.run()
