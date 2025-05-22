@@ -14,8 +14,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Configuration - Replace these with your actual values
-
 YOUR_USER_ID = 2031106491  # Your Telegram User ID
 
 # Channel IDs
@@ -32,7 +30,6 @@ DESTINATION_CHANNELS = {
 class ForwardingBot:
     def __init__(self):
         self.client = None
-        self.message_queue: Dict[str, List[Message]] = {subject: [] for subject in DESTINATION_CHANNELS.keys()}
         self.last_forwarded_id = 0
         self.forwarding_active = False
         self.initialized = False
@@ -48,11 +45,7 @@ class ForwardingBot:
             sleep_threshold=10
         )
 
-        # Register handlers
-        @self.client.on_message(filters.chat(SOURCE_CHANNEL))
-        async def handle_new_message(client: Client, message: Message):
-            await self.queue_message(message)
-
+        # Register command handler
         @self.client.on_message(filters.private & filters.command("forward"))
         async def handle_forward_command(client: Client, message: Message):
             await self.handle_forward(message)
@@ -61,59 +54,53 @@ class ForwardingBot:
         await self.client.start()
         me = await self.client.get_me()
         logger.info(f"{me.first_name} [@{me.username}] bot started")
+        
+        # Initialize with last message ID if available
+        try:
+            async for message in self.client.get_chat_history(SOURCE_CHANNEL, limit=1):
+                self.last_forwarded_id = message.id
+                logger.info(f"Initial last message ID: {self.last_forwarded_id}")
+        except RPCError as e:
+            logger.error(f"Couldn't get initial message ID: {e}")
+            self.last_forwarded_id = 0
+            
         self.initialized = True
 
-    async def queue_message(self, message: Message):
-        """Queue new messages as they arrive"""
-        if self.forwarding_active:
-            return
-            
-        text = message.text or message.caption or ""
-        subject = matcher.find_subject(text)
-        
-        if subject and subject in self.message_queue:
-            self.message_queue[subject].append(message)
-            logger.info(f"Queued message for {subject} (Total: {len(self.message_queue[subject])})")
-            self.last_forwarded_id = max(self.last_forwarded_id, message.id)
-
-    async def forward_messages(self):
-        """Forward all queued messages"""
+    async def scan_and_forward_messages(self):
+        """Scan for new messages and forward them"""
         self.forwarding_active = True
-        total_forwarded = 0
+        messages_to_forward = []
         
         try:
-            for subject, messages in self.message_queue.items():
-                if not messages or subject not in DESTINATION_CHANNELS:
+            # Scan for new messages (up to 1000 messages back)
+            async for message in self.client.get_chat_history(
+                SOURCE_CHANNEL, 
+                limit=1000,
+                offset_id=self.last_forwarded_id
+            ):
+                if message.id <= self.last_forwarded_id:
                     continue
+                messages_to_forward.append(message)
+            
+            # Sort messages in chronological order (oldest first)
+            messages_to_forward.sort(key=lambda m: m.id)
+            
+            # Forward messages in order
+            for message in messages_to_forward:
+                text = message.text or message.caption or ""
+                subject = matcher.find_subject(text)
                 
-                dest_channel = DESTINATION_CHANNELS[subject]
-                successful_forwards = 0
-                
-                for message in messages:
+                if subject and subject in DESTINATION_CHANNELS:
                     try:
-                        await message.copy(dest_channel)
-                        successful_forwards += 1
-                        self.last_forwarded_id = max(self.last_forwarded_id, message.id)
+                        await message.copy(DESTINATION_CHANNELS[subject])
+                        self.last_forwarded_id = message.id
+                        logger.info(f"Forwarded message {message.id} to {subject}")
                     except RPCError as e:
                         logger.error(f"Error forwarding message {message.id}: {e}")
-                
-                if successful_forwards > 0:
-                    logger.info(f"Forwarded {successful_forwards} messages to {subject}")
-                    total_forwarded += successful_forwards
-                    
-                    try:
-                        await self.client.send_message(
-                            dest_channel,
-                            f"✅ {successful_forwards} messages forwarded",
-                            parse_mode=enums.ParseMode.MARKDOWN
-                        )
-                    except RPCError as e:
-                        logger.error(f"Error sending confirmation: {e}")
-                
-                # Clear the queue for this subject
-                self.message_queue[subject].clear()
+                        continue
             
-            return total_forwarded
+            return len(messages_to_forward)
+            
         finally:
             self.forwarding_active = False
 
@@ -125,15 +112,17 @@ class ForwardingBot:
         if self.forwarding_active:
             return await message.reply("⏳ Forwarding in progress...")
         
-        # Check if there are queued messages
-        total_queued = sum(len(q) for q in self.message_queue.values())
+        await message.reply("⏳ Scanning for new messages...")
         
-        if total_queued == 0:
-            await message.reply("ℹ️ No queued messages to forward. New messages will be forwarded automatically as they arrive.")
-        else:
-            await message.reply(f"⏳ Forwarding {total_queued} queued messages...")
-            total_forwarded = await self.forward_messages()
-            await message.reply(f"✅ {total_forwarded} messages forwarded successfully!")
+        try:
+            count = await self.scan_and_forward_messages()
+            if count > 0:
+                await message.reply(f"✅ Successfully forwarded {count} new messages")
+            else:
+                await message.reply("ℹ️ No new messages found since last forward")
+        except Exception as e:
+            logger.error(f"Error during forwarding: {e}")
+            await message.reply("⚠️ An error occurred during forwarding")
 
     async def run(self):
         """Main bot loop"""
@@ -141,10 +130,7 @@ class ForwardingBot:
         
         # Keep the bot running
         while True:
-            await asyncio.sleep(3600)  # Periodic tasks can go here
-            queued = sum(len(q) for q in self.message_queue.values())
-            if queued > 0:
-                logger.info(f"Queue status: {queued} messages waiting")
+            await asyncio.sleep(3600)  # Just keep the bot alive
 
 # Import your matcher after the class definition
 from plugins.Sorting import matcher
@@ -158,4 +144,3 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"Fatal error: {e}")
         raise
-
