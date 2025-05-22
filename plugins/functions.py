@@ -1,6 +1,6 @@
 import os
 import asyncio
-from typing import Dict, List
+from typing import Dict
 from pyrogram import Client, filters, enums
 from pyrogram.types import Message
 from config import *
@@ -18,79 +18,101 @@ DESTINATION_CHANNELS = {
     'Zoology': -1002549422245
 }
 
-# Store messages in order for each subject
-message_queue: Dict[str, List[Message]] = {subject: [] for subject in DESTINATION_CHANNELS.keys()}
+# Track last forwarded message ID
+last_forwarded_id = 0
 forwarding_active = False
 
-async def forward_queued_messages(client: Client):
-    """Forward all queued messages in correct order"""
-    global forwarding_active
-    forwarding_active = True
+async def get_new_messages(client: Client):
+    """Fetch new messages since last forwarded ID"""
+    global last_forwarded_id
     
-    for subject, messages in message_queue.items():
-        if messages and subject in DESTINATION_CHANNELS:
+    messages = []
+    async for message in client.get_chat_history(SOURCE_CHANNEL):
+        if message.id <= last_forwarded_id:
+            break
+        messages.append(message)
+    
+    # Reverse to process in chronological order (oldest first)
+    return messages[::-1]
+
+async def forward_messages(client: Client, messages: list):
+    """Forward messages to their respective channels"""
+    global last_forwarded_id, forwarding_active
+    
+    forwarding_active = True
+    forwarded_count = 0
+    
+    for message in messages:
+        text = message.text or message.caption or ""
+        subject = matcher.find_subject(text)
+        
+        if subject and subject in DESTINATION_CHANNELS:
             dest_channel = DESTINATION_CHANNELS[subject]
             try:
-                # Forward messages in received order
-                for message in messages:
-                    if message.text:
-                        await message.copy(dest_channel)
-                    elif message.media:
-                        await message.copy(
-                            dest_channel,
-                            caption=message.caption,
-                            caption_entities=message.caption_entities
-                        )
-                print(f"Forwarded {len(messages)} messages to {subject} channel")
+                if message.text:
+                    await message.copy(dest_channel)
+                elif message.media:
+                    await message.copy(
+                        dest_channel,
+                        caption=message.caption,
+                        caption_entities=message.caption_entities
+                    )
                 
-                # Send confirmation
-                await client.send_message(
-                    dest_channel,
-                    f"✅ {len(messages)} messages have been forwarded in sequence.",
-                    parse_mode=enums.ParseMode.MARKDOWN
-                )
+                # Update last forwarded ID
+                if message.id > last_forwarded_id:
+                    last_forwarded_id = message.id
+                
+                forwarded_count += 1
+                print(f"Forwarded message {message.id} to {subject}")
                 
             except Exception as e:
-                print(f"Error forwarding to {subject}: {str(e)}")
-    
-    # Clear all queues after forwarding
-    for subject in message_queue:
-        message_queue[subject].clear()
+                print(f"Error forwarding message {message.id}: {str(e)}")
     
     forwarding_active = False
-
-@Client.on_message(filters.chat(SOURCE_CHANNEL) & ~filters.command("forward"))
-async def queue_content(client: Client, message: Message):
-    """Queue messages when they arrive in source channel"""
-    if forwarding_active:
-        return
-        
-    text = message.text or message.caption or ""
-    subject = matcher.find_subject(text)
-    
-    if subject and subject in message_queue:
-        message_queue[subject].append(message)
-        print(f"Queued message for {subject} (Total: {len(message_queue[subject])})")
+    return forwarded_count
 
 @Client.on_message(filters.private & filters.command("forward"))
-async def start_forwarding(client: Client, message: Message):
+async def handle_forward_command(client: Client, message: Message):
     """Handle /forward command in DM"""
-    if message.from_user.id != 2031106491:  # Replace with your user ID
+    if message.from_user.id != YOUR_USER_ID:  # Replace with your user ID
         return await message.reply("❌ You're not authorized to use this command.")
     
-    total_messages = sum(len(q) for q in message_queue.values())
-    if total_messages == 0:
-        return await message.reply("⚠️ No messages to forward.")
+    if forwarding_active:
+        return await message.reply("⏳ Forwarding is already in progress. Please wait.")
     
-    await message.reply(f"⏳ Starting to forward {total_messages} queued messages...")
-    await forward_queued_messages(client)
-    await message.reply("✅ All messages forwarded successfully!")
+    await message.reply("⏳ Fetching new messages...")
+    new_messages = await get_new_messages(client)
+    
+    if not new_messages:
+        return await message.reply("⚠️ No new messages to forward since last time.")
+    
+    await message.reply(f"⏳ Forwarding {len(new_messages)} new messages...")
+    total_forwarded = await forward_messages(client, new_messages)
+    
+    await message.reply(f"✅ Successfully forwarded {total_forwarded} messages!")
+    print(f"Last forwarded message ID is now: {last_forwarded_id}")
 
-async def check_queue_status():
-    """Periodically check queue status"""
-    while True:
-        await asyncio.sleep(3600)  # Check every hour
-        total = sum(len(q) for q in message_queue.values())
-        if total > 0:
-            print(f"Queue status: {total} messages waiting to be forwarded")
-          
+# Optional: Save/load last_forwarded_id to persist across restarts
+"""async def save_last_id():
+    """Save last forwarded ID to file"""
+    with open("last_id.txt", "w") as f:
+        f.write(str(last_forwarded_id))
+
+async def load_last_id():
+    """Load last forwarded ID from file"""
+    global last_forwarded_id
+    try:
+        with open("last_id.txt", "r") as f:
+            last_forwarded_id = int(f.read())
+    except (FileNotFoundError, ValueError):
+        last_forwarded_id = 0
+
+# Load last ID when starting
+async def startup():
+    await load_last_id()
+    print(f"Loaded last forwarded ID: {last_forwarded_id}")
+
+# Run startup when bot initializes
+if __name__ == "__main__":
+    app = Client("my_bot")
+    app.run(startup())"""
