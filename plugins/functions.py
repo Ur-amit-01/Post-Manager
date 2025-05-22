@@ -1,5 +1,6 @@
 import os
 import asyncio
+from typing import Dict, List
 from pyrogram import Client, filters, enums
 from pyrogram.types import Message
 from config import *
@@ -17,69 +18,79 @@ DESTINATION_CHANNELS = {
     'Zoology': -1002549422245
 }
 
-# Track forwarded messages for confirmation
-forwarded_messages = {channel: set() for channel in DESTINATION_CHANNELS.values()}
+# Store messages in order for each subject
+message_queue: Dict[str, List[Message]] = {subject: [] for subject in DESTINATION_CHANNELS.keys()}
+forwarding_active = False
 
-async def send_confirmation(client: Client, channel_id: int, count: int):
-    """Send confirmation message to destination channel"""
-    await client.send_message(
-        channel_id,
-        f"✅ {count} messages have been automatically sorted to this channel.",
-        parse_mode=enums.ParseMode.MARKDOWN
-    )
-    forwarded_messages[channel_id].clear()
+async def forward_queued_messages(client: Client):
+    """Forward all queued messages in correct order"""
+    global forwarding_active
+    forwarding_active = True
+    
+    for subject, messages in message_queue.items():
+        if messages and subject in DESTINATION_CHANNELS:
+            dest_channel = DESTINATION_CHANNELS[subject]
+            try:
+                # Forward messages in received order
+                for message in messages:
+                    if message.text:
+                        await message.copy(dest_channel)
+                    elif message.media:
+                        await message.copy(
+                            dest_channel,
+                            caption=message.caption,
+                            caption_entities=message.caption_entities
+                        )
+                print(f"Forwarded {len(messages)} messages to {subject} channel")
+                
+                # Send confirmation
+                await client.send_message(
+                    dest_channel,
+                    f"✅ {len(messages)} messages have been forwarded in sequence.",
+                    parse_mode=enums.ParseMode.MARKDOWN
+                )
+                
+            except Exception as e:
+                print(f"Error forwarding to {subject}: {str(e)}")
+    
+    # Clear all queues after forwarding
+    for subject in message_queue:
+        message_queue[subject].clear()
+    
+    forwarding_active = False
 
-@Client.on_message(filters.chat(SOURCE_CHANNEL))
-async def sort_content(client: Client, message: Message):
+@Client.on_message(filters.chat(SOURCE_CHANNEL) & ~filters.command("forward"))
+async def queue_content(client: Client, message: Message):
+    """Queue messages when they arrive in source channel"""
+    if forwarding_active:
+        return
+        
     text = message.text or message.caption or ""
     subject = matcher.find_subject(text)
     
-    if subject and subject in DESTINATION_CHANNELS:
-        dest_channel = DESTINATION_CHANNELS[subject]
-        try:
-            # Copy the message while preserving formatting
-            if message.text:
-                await client.send_message(
-                    dest_channel,
-                    text=message.text,
-                    entities=message.entities
-                )
-            elif message.photo:
-                await client.send_photo(
-                    dest_channel,
-                    photo=message.photo.file_id,
-                    caption=message.caption,
-                    caption_entities=message.caption_entities
-                )
-            elif message.document:
-                await client.send_document(
-                    dest_channel,
-                    document=message.document.file_id,
-                    caption=message.caption,
-                    caption_entities=message.caption_entities
-                )
-            elif message.video:
-                await client.send_video(
-                    dest_channel,
-                    video=message.video.file_id,
-                    caption=message.caption,
-                    caption_entities=message.caption_entities
-                )
-            
-            forwarded_messages[dest_channel].add(message.id)
-            print(f"Copied message {message.id} to {subject} channel")
-            
-            # Send confirmation if first message of batch
-            if len(forwarded_messages[dest_channel]) == 1:
-                await send_confirmation(client, dest_channel, 1)
-                
-        except Exception as e:
-            print(f"Error copying message {message.id}: {str(e)}")
+    if subject and subject in message_queue:
+        message_queue[subject].append(message)
+        print(f"Queued message for {subject} (Total: {len(message_queue[subject])})")
 
-async def daily_summary(client: Client):
+@Client.on_message(filters.private & filters.command("forward"))
+async def start_forwarding(client: Client, message: Message):
+    """Handle /forward command in DM"""
+    if message.from_user.id != YOUR_USER_ID:  # Replace with your user ID
+        return await message.reply("❌ You're not authorized to use this command.")
+    
+    total_messages = sum(len(q) for q in message_queue.values())
+    if total_messages == 0:
+        return await message.reply("⚠️ No messages to forward.")
+    
+    await message.reply(f"⏳ Starting to forward {total_messages} queued messages...")
+    await forward_queued_messages(client)
+    await message.reply("✅ All messages forwarded successfully!")
+
+async def check_queue_status():
+    """Periodically check queue status"""
     while True:
-        await asyncio.sleep(24 * 60 * 60)  # 24 hours
-        for channel_id, msg_ids in forwarded_messages.items():
-            if msg_ids:
-                await send_confirmation(client, channel_id, len(msg_ids))
+        await asyncio.sleep(3600)  # Check every hour
+        total = sum(len(q) for q in message_queue.values())
+        if total > 0:
+            print(f"Queue status: {total} messages waiting to be forwarded")
 
