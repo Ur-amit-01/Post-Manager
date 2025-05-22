@@ -1,5 +1,6 @@
 import logging
 import logging.config
+import asyncio
 from pyrogram import Client 
 from config import *
 from aiohttp import web
@@ -12,7 +13,6 @@ logging.getLogger("pyrogram").setLevel(logging.ERROR)
 
 
 class Bot(Client):
-
     def __init__(self):
         super().__init__(
             name="renamer",
@@ -30,14 +30,33 @@ class Bot(Client):
         self.mention = me.mention
         self.username = me.username
         
-        # Start web server
+        # Start your background task here
+        self.queue_task = asyncio.create_task(check_queue_status())
         
+        # Start web server
         logging.info(f"{me.first_name} ✅✅ BOT started successfully ✅✅")
 
     async def stop(self, *args):
+        # Cancel the background task when stopping
+        self.queue_task.cancel()
+        try:
+            await self.queue_task
+        except asyncio.CancelledError:
+            pass
+            
         await super().stop()      
-        logging.info("{me.first_name} Bot Stopped 🙄")
+        logging.info(f"{me.first_name} Bot Stopped 🙄")
 
-bot = Bot()
-asyncio.create_task(check_queue_status())
-bot.run()
+async def main():
+    bot = Bot()
+    await bot.start()
+    # Keep the bot running
+    await asyncio.Event().wait()
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logging.info("Bot stopped by user")
+    except Exception as e:
+        logging.error(f"Error: {e}")
