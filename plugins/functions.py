@@ -75,7 +75,7 @@ async def queue_content(client: Client, message: Message):
 @Client.on_message(filters.private & filters.command("forward"))
 async def start_forwarding(client: Client, message: Message):
     """Handle /forward command in DM"""
-    if message.from_user.id != YOUR_USER_ID:  # Replace with your user ID
+    if message.from_user.id != 2031106491:  # Replace with your user ID
         return await message.reply("❌ You're not authorized to use this command.")
     
     total_messages = sum(len(q) for q in message_queue.values())
