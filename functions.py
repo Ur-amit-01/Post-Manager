@@ -1,4 +1,3 @@
-import os
 import asyncio
 import logging
 from typing import Dict, List
@@ -17,7 +16,7 @@ logger = logging.getLogger(__name__)
 YOUR_USER_ID = 2031106491  # Your Telegram User ID
 
 # Channel IDs
-SOURCE_CHANNEL = -1002027394591  # Main channel to monitor
+SOURCE_CHANNEL = -1002027394591
 DESTINATION_CHANNELS = {
     'Physics': -1002611033664,
     'Inorganic Chemistry': -1002530766847,
@@ -32,6 +31,7 @@ class ForwardingBot:
         self.client = None
         self.last_forwarded_id = 0
         self.forwarding_active = False
+        self.pending_messages: Dict[int, Message] = {}  # Store messages by ID
         self.initialized = False
 
     async def initialize_client(self):
@@ -45,48 +45,45 @@ class ForwardingBot:
             sleep_threshold=10
         )
 
-        # Register command handler
+        @self.client.on_message(filters.chat(SOURCE_CHANNEL))
+        async def store_message(client: Client, message: Message):
+            """Store new messages as they arrive"""
+            if message.id > self.last_forwarded_id:
+                self.pending_messages[message.id] = message
+                logger.info(f"Stored message {message.id} (Total pending: {len(self.pending_messages)})")
+
         @self.client.on_message(filters.private & filters.command("forward"))
         async def handle_forward_command(client: Client, message: Message):
-            await self.handle_forward(message)
+            """Handle /forward command"""
+            await self.process_forward_command(message)
 
-        # Start the client
         await self.client.start()
         me = await self.client.get_me()
         logger.info(f"{me.first_name} [@{me.username}] bot started")
         
-        # Initialize with last message ID if available
+        # Try to get the most recent message (if any exist)
         try:
-            async for message in self.client.get_chat_history(SOURCE_CHANNEL, limit=1):
-                self.last_forwarded_id = message.id
-                logger.info(f"Initial last message ID: {self.last_forwarded_id}")
+            async for msg in self.client.get_chat_history(SOURCE_CHANNEL, limit=1):
+                self.last_forwarded_id = msg.id
+                logger.info(f"Initialized with last message ID: {self.last_forwarded_id}")
         except RPCError as e:
-            logger.error(f"Couldn't get initial message ID: {e}")
-            self.last_forwarded_id = 0
-            
+            logger.warning(f"Couldn't get initial message: {e}")
+        
         self.initialized = True
 
-    async def scan_and_forward_messages(self):
-        """Scan for new messages and forward them"""
+    async def process_pending_messages(self):
+        """Process and forward all pending messages in order"""
+        if not self.pending_messages:
+            return 0
+        
         self.forwarding_active = True
-        messages_to_forward = []
+        forwarded_count = 0
         
         try:
-            # Scan for new messages (up to 1000 messages back)
-            async for message in self.client.get_chat_history(
-                SOURCE_CHANNEL, 
-                limit=1000,
-                offset_id=self.last_forwarded_id
-            ):
-                if message.id <= self.last_forwarded_id:
-                    continue
-                messages_to_forward.append(message)
+            # Sort messages by ID (chronological order)
+            sorted_messages = sorted(self.pending_messages.values(), key=lambda m: m.id)
             
-            # Sort messages in chronological order (oldest first)
-            messages_to_forward.sort(key=lambda m: m.id)
-            
-            # Forward messages in order
-            for message in messages_to_forward:
+            for message in sorted_messages:
                 text = message.text or message.caption or ""
                 subject = matcher.find_subject(text)
                 
@@ -94,17 +91,23 @@ class ForwardingBot:
                     try:
                         await message.copy(DESTINATION_CHANNELS[subject])
                         self.last_forwarded_id = message.id
+                        forwarded_count += 1
                         logger.info(f"Forwarded message {message.id} to {subject}")
                     except RPCError as e:
                         logger.error(f"Error forwarding message {message.id}: {e}")
                         continue
             
-            return len(messages_to_forward)
+            # Clear forwarded messages from pending
+            self.pending_messages = {
+                id: msg for id, msg in self.pending_messages.items() 
+                if id > self.last_forwarded_id
+            }
             
+            return forwarded_count
         finally:
             self.forwarding_active = False
 
-    async def handle_forward(self, message: Message):
+    async def process_forward_command(self, message: Message):
         """Handle the /forward command"""
         if message.from_user.id != YOUR_USER_ID:
             return await message.reply("❌ Unauthorized")
@@ -112,25 +115,19 @@ class ForwardingBot:
         if self.forwarding_active:
             return await message.reply("⏳ Forwarding in progress...")
         
-        await message.reply("⏳ Scanning for new messages...")
+        await message.reply(f"⏳ Processing {len(self.pending_messages)} pending messages...")
+        count = await self.process_pending_messages()
         
-        try:
-            count = await self.scan_and_forward_messages()
-            if count > 0:
-                await message.reply(f"✅ Successfully forwarded {count} new messages")
-            else:
-                await message.reply("ℹ️ No new messages found since last forward")
-        except Exception as e:
-            logger.error(f"Error during forwarding: {e}")
-            await message.reply("⚠️ An error occurred during forwarding")
+        if count > 0:
+            await message.reply(f"✅ Successfully forwarded {count} messages")
+        else:
+            await message.reply("ℹ️ No new messages to forward")
 
     async def run(self):
         """Main bot loop"""
         await self.initialize_client()
-        
-        # Keep the bot running
         while True:
-            await asyncio.sleep(3600)  # Just keep the bot alive
+            await asyncio.sleep(3600)  # Keep the bot running
 
 # Import your matcher after the class definition
 from plugins.Sorting import matcher
