@@ -158,7 +158,7 @@ CHAPTER_DATA = {
         'Concentration of mixture', 'Law of equivalent', 'Significant Feature',
         'Redox Reaction', 'Oxidation,Reduction and Oxidation Number Calculation', 'n-Factor Calculation',
         'Balancing of Redox Reactions', 'Redox Titrations',
-        'Solutions', 'Solution', 'Binary Solution and Concentration Terms', 'Solubility and Henry Law',
+        'Solutions', 'Solution', 'vapour pressure', 'Binary Solution and Concentration Terms', 'Solubility and Henry Law',
         'Raoult\'s law & its application', 'Ideal & non ideal solutions', 'Colligative properties',
         'Abnormal molar mass',
         'Thermodynamics', 'Thermodynamics Parameters', 'Pressure – volume work', 'Work done in various processes',
