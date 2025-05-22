@@ -68,7 +68,7 @@ class ForwardBot(Client):
     @Client.on_message(filters.private & filters.command("forward"))
     async def handle_forward_command(self, client: Client, message: Message):
         """Handle manual forward command (for recent messages)"""
-        if message.from_user.id != YOUR_USER_ID:  # Replace with your user ID
+        if message.from_user.id != 2031106491:  # Replace with your user ID
             return await message.reply("❌ Unauthorized")
         
         if self.forwarding_active:
