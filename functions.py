@@ -1,4 +1,3 @@
-
 import asyncio
 import logging
 from pyrogram import Client, filters
@@ -122,6 +121,52 @@ class HybridForwarder:
         except Exception as e:
             logger.error(f"Error saving state: {e}")
 
+    async def get_new_messages(self, source_channel, last_forwarded_id):
+        """Get messages newer than last_forwarded_id"""
+        try:
+            messages = []
+            current_last_id = await self.get_last_message_id(source_channel)
+            
+            if last_forwarded_id >= current_last_id:
+                return []  # No new messages
+            
+            logger.info(f"Fetching messages between {last_forwarded_id} and {current_last_id}")
+            
+            # Fetch messages in chunks to avoid memory issues
+            chunk_size = 100
+            offset_id = last_forwarded_id
+            
+            while True:
+                chunk_messages = []
+                async for message in self.user_client.get_chat_history(
+                    source_channel,
+                    limit=chunk_size,
+                    offset_id=offset_id
+                ):
+                    if message.id > last_forwarded_id:
+                        chunk_messages.append(message)
+                    else:
+                        break
+                
+                if not chunk_messages:
+                    break
+                
+                # Extend the messages list with the new chunk
+                messages.extend(chunk_messages)
+                
+                # Update the offset to the oldest message in the chunk
+                offset_id = chunk_messages[-1].id - 1
+                
+                # Small delay to avoid rate limits
+                await asyncio.sleep(0.5)
+            
+            logger.info(f"Found {len(messages)} new messages")
+            return messages
+
+        except Exception as e:
+            logger.error(f"Error getting new messages: {e}")
+            return []
+
     async def initialize(self):
         """Initialize clients and MongoDB"""
         try:
@@ -165,39 +210,6 @@ class HybridForwarder:
         except Exception as e:
             logger.critical(f"Initialization failed: {e}")
             raise
-
-    async def get_new_messages(self, source_channel, last_forwarded_id):
-        """Get messages newer than last_forwarded_id"""
-        try:
-            messages = []
-            current_last_id = 0
-            
-            # First get the current last message ID
-            async for message in self.user_client.get_chat_history(source_channel, limit=1):
-                current_last_id = message.id
-                if message.id > last_forwarded_id:
-                    messages.append(message)
-                break
-            
-            if not messages:
-                return []  # No new messages
-            
-            # Now fetch all messages between last_forwarded_id and current_last_id
-            async for message in self.user_client.get_chat_history(
-                source_channel,
-                limit=100,
-                offset_id=last_forwarded_id
-            ):
-                if message.id > last_forwarded_id:
-                    messages.append(message)
-                else:
-                    break
-            
-            return messages
-
-        except Exception as e:
-            logger.error(f"Error getting new messages: {e}")
-            return []
 
     async def scan_and_forward(self, set_name):
         """Process new messages for forwarding"""
@@ -290,9 +302,7 @@ class HybridForwarder:
             # Add details for each channel set
             for set_name in CHANNEL_CONFIGS:
                 last_id = await self.load_state(set_name)
-                async for msg in self.user_client.get_chat_history(CHANNEL_CONFIGS[set_name]["SOURCE"], limit=1):
-                    current_id = msg.id
-                    break
+                current_id = await self.get_last_message_id(CHANNEL_CONFIGS[set_name]["SOURCE"])
                 
                 response += (
                     f"🔹 **{set_name}**\n"
