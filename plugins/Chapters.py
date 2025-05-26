@@ -8,7 +8,7 @@ from config import *
 CHAPTER_DATA = {
     'Physics': [
         'Basic Maths & Calculus', 'Trigonometry', 'Algebra', 'Binomial', 'AP', 'GP', 'Graphs', 
-        'Logarithms', 'Coordinate Geometry', 'Differentiation', 'Question Practice', 
+        'Logarithms', 'Coordinate Geometry', 'Differentiation', 
         'Units and Measurements', 'Physical Quantities and Units', 'Dimensions and Dimensions formula', 
         'Dimensional Analysis', 'Significant Figures', 'Errors in Measurement', 'Measuring Instruments', 
         'Vectors', 'Introduction of vector and scalar', 'Types of vectors', 'Vector addition', 
