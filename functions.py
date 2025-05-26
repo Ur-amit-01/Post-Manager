@@ -22,14 +22,41 @@ logger = logging.getLogger(__name__)
 USER_SESSION_STRING = "BQFP49AAn6jgY8Wwp8nhPAiF1PoD6hVxl0HWUtx8AldMjcpUOpkB0jI63t8aRNmAHQ_CWyU7CPZCiQVSOFMeL-5pLl2Z2D18R7uJx52rivl46MEe1i9aFC9gUxXRHChvUgAJWTAyytSg_BVKb8LhAKnPvNQoeV8znsy6U0wtEHY9a_lu04-fxzB5mAWZDrS12HGbkZvsocaEHgMLiGUl3q83bThYzHAciMjgzKxNiKB7VeLsyy5Ua01Ndh2uRP1KL43sp-KtF9wSw4wNV-LGtAGnMhDBG8_0Yt3zKIBk21KtM7BGsZZinxdgfs3sU53EmoAk61B8YEJ5MfAikBSRI00B8Ng4AAAAAAGVhUI_AA"
 YOUR_USER_ID = 2031106491
 
-SOURCE_CHANNEL = -1002027394591
-DESTINATION_CHANNELS = {
-    'Physics': -1002611033664,
-    'Inorganic Chemistry': -1002530766847,
-    'Organic Chemistry': -1002623306070,
-    'Physical Chemistry': -1002533864126,
-    'Botany': -1002537691102,
-    'Zoology': -1002549422245
+# Channel configurations
+CHANNEL_CONFIGS = {
+    "SET_1": {
+        "SOURCE": -1002027394591,
+        "DESTINATIONS": {
+            'Physics': -1002611033664,
+            'Inorganic Chemistry': -1002530766847,
+            'Organic Chemistry': -1002623306070,
+            'Physical Chemistry': -1002533864126,
+            'Botany': -1002537691102,
+            'Zoology': -1002549422245
+        }
+    },
+    "SET_2": {
+        "SOURCE": -1002027394592,  # Replace with actual source channel ID
+        "DESTINATIONS": {
+            'Physics': -1002611033665,  # Replace with actual destination IDs
+            'Inorganic Chemistry': -1002530766848,
+            'Organic Chemistry': -1002623306071,
+            'Physical Chemistry': -1002533864127,
+            'Botany': -1002537691103,
+            'Zoology': -1002549422246
+        }
+    },
+    "SET_3": {
+        "SOURCE": -1002027394593,  # Replace with actual source channel ID
+        "DESTINATIONS": {
+            'Physics': -1002611033666,  # Replace with actual destination IDs
+            'Inorganic Chemistry': -1002530766849,
+            'Organic Chemistry': -1002623306072,
+            'Physical Chemistry': -1002533864128,
+            'Botany': -1002537691104,
+            'Zoology': -1002549422247
+        }
+    }
 }
 
 STATE_FILE = "forwarder_state.pkl"
@@ -38,33 +65,37 @@ class HybridForwarder:
     def __init__(self):
         self.user_client = None
         self.bot_client = None
-        self.last_forwarded_id = 0
+        self.last_forwarded_ids = {set_name: 0 for set_name in CHANNEL_CONFIGS}  # Track IDs per set
         self.forwarding_active = False
         self.initialized = False
 
     async def load_state(self):
-        """Load the last forwarded ID from file"""
+        """Load the last forwarded IDs from file"""
         try:
             if os.path.exists(STATE_FILE):
                 with open(STATE_FILE, 'rb') as f:
                     state = pickle.load(f)
-                    self.last_forwarded_id = state.get('last_forwarded_id', 0)
-                    logger.info(f"Loaded state: last_forwarded_id={self.last_forwarded_id}")
+                    for set_name in CHANNEL_CONFIGS:
+                        self.last_forwarded_ids[set_name] = state.get(set_name, {}).get('last_forwarded_id', 0)
+                    logger.info(f"Loaded state: {self.last_forwarded_ids}")
             else:
                 logger.info("No state file found, starting fresh")
         except Exception as e:
             logger.error(f"Error loading state: {e}")
-            self.last_forwarded_id = 0
+            for set_name in CHANNEL_CONFIGS:
+                self.last_forwarded_ids[set_name] = 0
 
     async def save_state(self):
         """Save the current state to file"""
         try:
-            state = {
-                'last_forwarded_id': self.last_forwarded_id
-            }
+            state = {}
+            for set_name in CHANNEL_CONFIGS:
+                state[set_name] = {
+                    'last_forwarded_id': self.last_forwarded_ids[set_name]
+                }
             with open(STATE_FILE, 'wb') as f:
                 pickle.dump(state, f)
-            logger.debug(f"State saved: last_forwarded_id={self.last_forwarded_id}")
+            logger.debug(f"State saved: {self.last_forwarded_ids}")
         except Exception as e:
             logger.error(f"Error saving state: {e}")
 
@@ -101,17 +132,18 @@ class HybridForwarder:
             logger.info(f"User account: @{user_me.username} (ID: {user_me.id})")
             logger.info(f"Bot account: @{bot_me.username} (ID: {bot_me.id})")
 
-            # If no last_forwarded_id, get the latest message ID from channel
-            if self.last_forwarded_id == 0:
-                try:
-                    async for message in self.user_client.get_chat_history(SOURCE_CHANNEL, limit=1):
-                        self.last_forwarded_id = message.id
-                        logger.info(f"Initialized last_forwarded_id to current latest message: {self.last_forwarded_id}")
-                        await self.save_state()
-                        break
-                except Exception as e:
-                    logger.error(f"Failed to get latest message ID: {e}")
-                    raise
+            # Initialize last_forwarded_ids if not set
+            for set_name, config in CHANNEL_CONFIGS.items():
+                if self.last_forwarded_ids[set_name] == 0:
+                    try:
+                        async for message in self.user_client.get_chat_history(config["SOURCE"], limit=1):
+                            self.last_forwarded_ids[set_name] = message.id
+                            logger.info(f"Initialized {set_name} last_forwarded_id to current latest message: {message.id}")
+                            await self.save_state()
+                            break
+                    except Exception as e:
+                        logger.error(f"Failed to get latest message ID for {set_name}: {e}")
+                        raise
 
             # Register command handler
             @self.bot_client.on_message(filters.command("forward") & filters.private)
@@ -125,21 +157,21 @@ class HybridForwarder:
             logger.critical(f"Initialization failed: {e}")
             raise
 
-    async def get_all_new_messages(self):
-        """Get all messages newer than last_forwarded_id"""
+    async def get_all_new_messages(self, source_channel, last_forwarded_id):
+        """Get all messages newer than last_forwarded_id for a specific source channel"""
         new_messages = []
         try:
             # First get the current latest message ID
             current_latest_id = 0
-            async for message in self.user_client.get_chat_history(SOURCE_CHANNEL, limit=1):
+            async for message in self.user_client.get_chat_history(source_channel, limit=1):
                 current_latest_id = message.id
                 break
 
-            if current_latest_id <= self.last_forwarded_id:
-                logger.info("No new messages available")
+            if current_latest_id <= last_forwarded_id:
+                logger.info(f"No new messages available in channel {source_channel}")
                 return []
 
-            logger.info(f"Scanning for messages between {self.last_forwarded_id} and {current_latest_id}")
+            logger.info(f"Scanning for messages between {last_forwarded_id} and {current_latest_id} in channel {source_channel}")
 
             # Collect all messages newer than last_forwarded_id
             all_messages = []
@@ -148,7 +180,7 @@ class HybridForwarder:
             while True:
                 batch = []
                 async for message in self.user_client.get_chat_history(
-                    SOURCE_CHANNEL,
+                    source_channel,
                     limit=100,
                     offset_id=offset_id
                 ):
@@ -159,9 +191,9 @@ class HybridForwarder:
                     
                 # Find where our last_forwarded_id is in this batch
                 for i, msg in enumerate(batch):
-                    if msg.id <= self.last_forwarded_id:
+                    if msg.id <= last_forwarded_id:
                         # We've reached messages we've already processed
-                        new_messages = [m for m in batch[:i] if m.id > self.last_forwarded_id]
+                        new_messages = [m for m in batch[:i] if m.id > last_forwarded_id]
                         all_messages.extend(new_messages)
                         logger.info(f"Found {len(new_messages)} new messages in this batch")
                         return all_messages
@@ -176,11 +208,11 @@ class HybridForwarder:
             return all_messages
 
         except Exception as e:
-            logger.error(f"Error getting new messages: {e}")
+            logger.error(f"Error getting new messages from channel {source_channel}: {e}")
             return []
 
-    async def scan_and_forward(self):
-        """Scan for new messages and forward them"""
+    async def scan_and_forward(self, set_name):
+        """Scan for new messages and forward them for a specific channel set"""
         if self.forwarding_active:
             logger.warning("Forwarding already in progress")
             return 0
@@ -189,7 +221,12 @@ class HybridForwarder:
         forwarded_count = 0
         
         try:
-            new_messages = await self.get_all_new_messages()
+            config = CHANNEL_CONFIGS[set_name]
+            source_channel = config["SOURCE"]
+            destinations = config["DESTINATIONS"]
+            last_forwarded_id = self.last_forwarded_ids[set_name]
+
+            new_messages = await self.get_all_new_messages(source_channel, last_forwarded_id)
             if not new_messages:
                 return 0
 
@@ -214,20 +251,20 @@ class HybridForwarder:
                         logger.debug(f"No subject found in message {message.id}")
                         continue
                         
-                    if subject not in DESTINATION_CHANNELS:
-                        logger.debug(f"Subject '{subject}' not in destination channels")
+                    if subject not in destinations:
+                        logger.debug(f"Subject '{subject}' not in destination channels for {set_name}")
                         continue
                         
-                    dest_channel = DESTINATION_CHANNELS[subject]
+                    dest_channel = destinations[subject]
                     logger.info(f"Attempting to forward message {message.id} to {subject} (Channel: {dest_channel})")
                     
                     try:
                         await self.bot_client.copy_message(
                             chat_id=dest_channel,
-                            from_chat_id=SOURCE_CHANNEL,
+                            from_chat_id=source_channel,
                             message_id=message.id
                         )
-                        self.last_forwarded_id = message.id
+                        self.last_forwarded_ids[set_name] = message.id
                         forwarded_count += 1
                         logger.info(f"Successfully forwarded message {message.id}")
                         
@@ -249,7 +286,7 @@ class HybridForwarder:
             
         finally:
             self.forwarding_active = False
-            logger.info(f"Forwarding completed. Total forwarded: {forwarded_count}")
+            logger.info(f"Forwarding completed for {set_name}. Total forwarded: {forwarded_count}")
 
     async def handle_forward(self, message: Message):
         """Handle the /forward command"""
@@ -263,19 +300,21 @@ class HybridForwarder:
             if not self.initialized:
                 return await message.reply("⚠️ Bot not fully initialized yet")
             
-            await message.reply("⏳ Scanning for new messages...")
-            forwarded_count = await self.scan_and_forward()
+            await message.reply("⏳ Scanning for new messages in all channel sets...")
             
-            if forwarded_count > 0:
-                response = f"✅ Successfully forwarded {forwarded_count} message(s)\nLast forwarded ID: {self.last_forwarded_id}"
-            else:
-                # Get current latest message ID for more informative response
-                current_latest_id = 0
-                async for msg in self.user_client.get_chat_history(SOURCE_CHANNEL, limit=1):
-                    current_latest_id = msg.id
-                    break
-                
-                response = f"ℹ️ No new messages to forward\nCurrent last message in channel: {current_latest_id}\nLast forwarded ID: {self.last_forwarded_id}"
+            response = ""
+            for set_name in CHANNEL_CONFIGS:
+                forwarded_count = await self.scan_and_forward(set_name)
+                if forwarded_count > 0:
+                    response += f"✅ {set_name}: Forwarded {forwarded_count} message(s)\n"
+                else:
+                    # Get current latest message ID for more informative response
+                    current_latest_id = 0
+                    async for msg in self.user_client.get_chat_history(CHANNEL_CONFIGS[set_name]["SOURCE"], limit=1):
+                        current_latest_id = msg.id
+                        break
+                    
+                    response += f"ℹ️ {set_name}: No new messages (Current: {current_latest_id}, Last forwarded: {self.last_forwarded_ids[set_name]})\n"
             
             await message.reply(response)
             
