@@ -97,7 +97,7 @@ class HybridForwarder:
             # Try to load from MongoDB
             doc = await self.db.state.find_one({"set_name": set_name})
             if doc:
-                return doc["last_forwarded_id"]
+                return doc.get("last_forwarded_id", 0)
             
             # Initialize with current last message ID if no record exists
             source_channel = CHANNEL_CONFIGS[set_name]["SOURCE"]
@@ -128,37 +128,24 @@ class HybridForwarder:
             current_last_id = await self.get_last_message_id(source_channel)
             
             if last_forwarded_id >= current_last_id:
-                return []  # No new messages
+                logger.info(f"No new messages (last: {last_forwarded_id}, current: {current_last_id})")
+                return []
             
             logger.info(f"Fetching messages between {last_forwarded_id} and {current_last_id}")
             
-            # Fetch messages in chunks to avoid memory issues
-            chunk_size = 100
-            offset_id = last_forwarded_id
-            
-            while True:
-                chunk_messages = []
-                async for message in self.user_client.get_chat_history(
-                    source_channel,
-                    limit=chunk_size,
-                    offset_id=offset_id
-                ):
-                    if message.id > last_forwarded_id:
-                        chunk_messages.append(message)
-                    else:
-                        break
-                
-                if not chunk_messages:
+            # Fetch messages in reverse order (newest first)
+            async for message in self.user_client.get_chat_history(
+                source_channel,
+                limit=None,  # Get all available messages
+                offset_id=last_forwarded_id
+            ):
+                if message.id > last_forwarded_id:
+                    messages.append(message)
+                else:
                     break
                 
-                # Extend the messages list with the new chunk
-                messages.extend(chunk_messages)
-                
-                # Update the offset to the oldest message in the chunk
-                offset_id = chunk_messages[-1].id - 1
-                
-                # Small delay to avoid rate limits
-                await asyncio.sleep(0.5)
+                # Small delay to avoid flooding
+                await asyncio.sleep(0.1)
             
             logger.info(f"Found {len(messages)} new messages")
             return messages
@@ -247,6 +234,7 @@ class HybridForwarder:
                     text = message.text or message.caption or ""
                     subject = matcher.find_subject(text)
                     if not subject or subject not in destinations:
+                        logger.debug(f"Skipping message {message.id} - no matching subject")
                         continue
                     
                     # Forward the message
@@ -262,7 +250,7 @@ class HybridForwarder:
                     logger.info(f"Forwarded message {message.id} to {subject}")
                     
                     # Small delay to avoid rate limits
-                    await asyncio.sleep(0.3)
+                    await asyncio.sleep(0.5)
                     
                 except RPCError as e:
                     logger.error(f"Failed to forward message {message.id}: {e}")
