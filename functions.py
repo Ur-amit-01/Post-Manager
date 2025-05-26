@@ -126,58 +126,58 @@ class HybridForwarder:
             raise
 
     async def get_all_new_messages(self):
-    """Get all messages newer than last_forwarded_id"""
-    new_messages = []
-    try:
-        # First get the current latest message ID
-        current_latest_id = 0
-        async for message in self.user_client.get_chat_history(SOURCE_CHANNEL, limit=1):
-            current_latest_id = message.id
-            break
-
-        if current_latest_id <= self.last_forwarded_id:
-            logger.info("No new messages available")
-            return []
-
-        logger.info(f"Scanning for messages between {self.last_forwarded_id} and {current_latest_id}")
-
-        # Collect all messages newer than last_forwarded_id
-        all_messages = []
-        offset_id = 0  # Start from the newest message
-        
-        while True:
-            batch = []
-            async for message in self.user_client.get_chat_history(
-                SOURCE_CHANNEL,
-                limit=100,
-                offset_id=offset_id
-            ):
-                batch.append(message)
-            
-            if not batch:
+        """Get all messages newer than last_forwarded_id"""
+        new_messages = []
+        try:
+            # First get the current latest message ID
+            current_latest_id = 0
+            async for message in self.user_client.get_chat_history(SOURCE_CHANNEL, limit=1):
+                current_latest_id = message.id
                 break
-                
-            # Find where our last_forwarded_id is in this batch
-            for i, msg in enumerate(batch):
-                if msg.id <= self.last_forwarded_id:
-                    # We've reached messages we've already processed
-                    new_messages = [m for m in batch[:i] if m.id > self.last_forwarded_id]
-                    all_messages.extend(new_messages)
-                    logger.info(f"Found {len(new_messages)} new messages in this batch")
-                    return all_messages
-                
-            # All messages in this batch are new
-            all_messages.extend(batch)
-            offset_id = batch[-1].id  # Move to next older batch
+
+            if current_latest_id <= self.last_forwarded_id:
+                logger.info("No new messages available")
+                return []
+
+            logger.info(f"Scanning for messages between {self.last_forwarded_id} and {current_latest_id}")
+
+            # Collect all messages newer than last_forwarded_id
+            all_messages = []
+            offset_id = 0  # Start from the newest message
             
-            # Small delay to avoid flooding
-            await asyncio.sleep(0.5)
+            while True:
+                batch = []
+                async for message in self.user_client.get_chat_history(
+                    SOURCE_CHANNEL,
+                    limit=100,
+                    offset_id=offset_id
+                ):
+                    batch.append(message)
+                
+                if not batch:
+                    break
+                    
+                # Find where our last_forwarded_id is in this batch
+                for i, msg in enumerate(batch):
+                    if msg.id <= self.last_forwarded_id:
+                        # We've reached messages we've already processed
+                        new_messages = [m for m in batch[:i] if m.id > self.last_forwarded_id]
+                        all_messages.extend(new_messages)
+                        logger.info(f"Found {len(new_messages)} new messages in this batch")
+                        return all_messages
+                    
+                # All messages in this batch are new
+                all_messages.extend(batch)
+                offset_id = batch[-1].id  # Move to next older batch
+                
+                # Small delay to avoid flooding
+                await asyncio.sleep(0.5)
 
-        return all_messages
+            return all_messages
 
-    except Exception as e:
-        logger.error(f"Error getting new messages: {e}")
-        return []
+        except Exception as e:
+            logger.error(f"Error getting new messages: {e}")
+            return []
 
     async def scan_and_forward(self):
         """Scan for new messages and forward them"""
