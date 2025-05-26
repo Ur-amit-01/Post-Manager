@@ -36,25 +36,25 @@ CHANNEL_CONFIGS = {
         }
     },
     "SET_2": {
-        "SOURCE": -1002027394592,  # Replace with actual source channel ID
+        "SOURCE": -1002027394591,  # Replace with actual source channel ID
         "DESTINATIONS": {
-            'Physics': -1002611033665,  # Replace with actual destination IDs
-            'Inorganic Chemistry': -1002530766848,
-            'Organic Chemistry': -1002623306071,
-            'Physical Chemistry': -1002533864127,
-            'Botany': -1002537691103,
-            'Zoology': -1002549422246
+            'Physics': -1002611033664,  # Replace with actual destination IDs
+            'Inorganic Chemistry': -1002530766847,
+            'Organic Chemistry': -1002623306070,
+            'Physical Chemistry': -1002533864126,
+            'Botany': -1002537691102,
+            'Zoology': -1002549422245
         }
     },
     "SET_3": {
-        "SOURCE": -1002027394593,  # Replace with actual source channel ID
+        "SOURCE": -1002027394591,  # Replace with actual source channel ID
         "DESTINATIONS": {
-            'Physics': -1002611033666,  # Replace with actual destination IDs
-            'Inorganic Chemistry': -1002530766849,
-            'Organic Chemistry': -1002623306072,
-            'Physical Chemistry': -1002533864128,
-            'Botany': -1002537691104,
-            'Zoology': -1002549422247
+            'Physics': -1002611033664,  # Replace with actual destination IDs
+            'Inorganic Chemistry': -1002530766847,
+            'Organic Chemistry': -1002623306070,
+            'Physical Chemistry': -1002533864126,
+            'Botany': -1002537691102,
+            'Zoology': -1002549422245
         }
     }
 }
