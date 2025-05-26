@@ -350,22 +350,34 @@ class HybridForwarder:
             
             # Prepare detailed response
             response = "📊 Forwarding Results:\n\n"
+            total_forwarded = 0
+            total_processed = 0
+            
             for set_name, (forwarded, processed) in zip(CHANNEL_CONFIGS.keys(), results):
+                efficiency = 0.0
+                if processed > 0:
+                    efficiency = (forwarded / processed) * 100
+                
                 response += (
                     f"🔹 *{set_name}:*\n"
                     f"   - Processed: `{processed}` messages\n"
                     f"   - Forwarded: `{forwarded}` messages\n"
-                    f"   - Efficiency: `{forwarded/processed*100:.1f}%`\n\n"
+                    f"   - Efficiency: `{efficiency:.1f}%`\n\n"
                 )
+                
+                total_forwarded += forwarded
+                total_processed += processed
             
             # Add summary
-            total_forwarded = sum(f for f, _ in results)
-            total_processed = sum(p for _, p in results)
+            overall_efficiency = 0.0
+            if total_processed > 0:
+                overall_efficiency = (total_forwarded / total_processed) * 100
+                
             response += (
                 f"✨ *Summary*\n"
                 f"Total Processed: `{total_processed}`\n"
                 f"Total Forwarded: `{total_forwarded}`\n"
-                f"Overall Efficiency: `{total_forwarded/total_processed*100:.1f}%`"
+                f"Overall Efficiency: `{overall_efficiency:.1f}%`"
             )
             
             await status_msg.edit_text(response)
@@ -434,12 +446,16 @@ class HybridForwarder:
                     logger.error(f"Error getting latest message for {set_name}: {e}")
                     current_latest_id = "Error"
                 
+                waiting_count = "N/A"
+                if isinstance(current_latest_id, int) and isinstance(self.last_forwarded_ids[set_name], int):
+                    waiting_count = current_latest_id - self.last_forwarded_ids[set_name]
+                
                 response += (
                     f"🔹 *{set_name}:*\n"
                     f"  - Last Run: `{last_run_str}`\n"
                     f"  - Last Forwarded ID: `{self.last_forwarded_ids[set_name]}`\n"
                     f"  - Current Latest ID: `{current_latest_id}`\n"
-                    f"  - Messages Waiting: `{current_latest_id - self.last_forwarded_ids[set_name] if isinstance(current_latest_id, int) else 'N/A'}`\n\n"
+                    f"  - Messages Waiting: `{waiting_count}`\n\n"
                 )
             
             await message.reply(response)
