@@ -73,7 +73,7 @@ class HybridForwarder:
     async def init_mongo(self):
         """Initialize MongoDB connection"""
         try:
-            self.mongo_client = AsyncIOMotorClient(MONGO_URI)
+            self.mongo_client = AsyncIOMotorClient(DB_URL)
             self.db = self.mongo_client["telegram_forwarder"]
             await self.mongo_client.server_info()
             logger.info("Connected to MongoDB successfully")
