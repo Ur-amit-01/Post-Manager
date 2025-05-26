@@ -1,12 +1,10 @@
+
 import asyncio
 import logging
 from pyrogram import Client, filters
 from pyrogram.types import Message
 from pyrogram.errors import RPCError
 from config import *
-import os
-from datetime import datetime
-import time
 from motor.motor_asyncio import AsyncIOMotorClient
 from plugins.Sorting import matcher
 
@@ -75,9 +73,9 @@ class HybridForwarder:
     async def init_mongo(self):
         """Initialize MongoDB connection"""
         try:
-            self.mongo_client = AsyncIOMotorClient(DB_URL)
+            self.mongo_client = AsyncIOMotorClient(MONGO_URI)
             self.db = self.mongo_client["telegram_forwarder"]
-            await self.mongo_client.server_info()  # Test connection
+            await self.mongo_client.server_info()
             logger.info("Connected to MongoDB successfully")
         except Exception as e:
             logger.error(f"Failed to connect to MongoDB: {e}")
@@ -87,7 +85,18 @@ class HybridForwarder:
         """Load the last forwarded ID from MongoDB"""
         try:
             doc = await self.db.state.find_one({"set_name": set_name})
-            return doc["last_forwarded_id"] if doc else 0
+            if doc:
+                return doc["last_forwarded_id"]
+            
+            # Initialize with the last message ID if no state exists
+            async for message in self.user_client.get_chat_history(
+                CHANNEL_CONFIGS[set_name]["SOURCE"], 
+                limit=1
+            ):
+                await self.save_state(set_name, message.id)
+                return message.id
+                
+            return 0
         except Exception as e:
             logger.error(f"Error loading state for {set_name}: {e}")
             return 0
@@ -100,17 +109,14 @@ class HybridForwarder:
                 {"$set": {"last_forwarded_id": last_id}},
                 upsert=True
             )
-            logger.debug(f"State saved for {set_name}: {last_id}")
         except Exception as e:
             logger.error(f"Error saving state for {set_name}: {e}")
 
     async def initialize(self):
-        """Initialize clients and MongoDB"""
+        """Initialize clients and MongoDB - Minimal startup checks"""
         try:
-            # Initialize MongoDB first
             await self.init_mongo()
 
-            # User client (uses session string)
             self.user_client = Client(
                 "user_account",
                 api_id=API_ID,
@@ -119,7 +125,6 @@ class HybridForwarder:
                 in_memory=True
             )
 
-            # Bot client (uses bot token)
             self.bot_client = Client(
                 "forward_bot",
                 api_id=API_ID,
@@ -127,15 +132,13 @@ class HybridForwarder:
                 bot_token=BOT_TOKEN
             )
 
-            # Start both clients
             await self.user_client.start()
             await self.bot_client.start()
             
-            # Verify authorization
+            # Verify authorization (minimal check)
             user_me = await self.user_client.get_me()
             bot_me = await self.bot_client.get_me()
-            logger.info(f"User account: @{user_me.username} (ID: {user_me.id})")
-            logger.info(f"Bot account: @{bot_me.username} (ID: {bot_me.id})")
+            logger.info(f"User: @{user_me.username}, Bot: @{bot_me.username}")
 
             # Register command handlers
             @self.bot_client.on_message(filters.command("forward") & filters.private)
@@ -147,49 +150,25 @@ class HybridForwarder:
                 await self.handle_channels(message)
 
             self.initialized = True
-            logger.info("Hybrid bot initialized successfully")
+            logger.info("Bot initialized successfully")
 
         except Exception as e:
             logger.critical(f"Initialization failed: {e}")
             raise
 
     async def get_new_messages_fast(self, source_channel, last_forwarded_id):
-        """Optimized message fetching using offset and limit"""
+        """Fetch only new messages since last_forwarded_id"""
         try:
             messages = []
-            current_id = 0
-            
-            # Get the most recent message first to establish current_id
-            async for message in self.user_client.get_chat_history(source_channel, limit=1):
-                current_id = message.id
-                if current_id > last_forwarded_id:
+            async for message in self.user_client.get_chat_history(
+                source_channel,
+                limit=100,
+                offset_id=last_forwarded_id
+            ):
+                if message.id > last_forwarded_id:
                     messages.append(message)
-                break
-            
-            if not messages:
-                return []
-            
-            # Fetch messages in batches until we reach last_forwarded_id
-            while True:
-                batch = []
-                async for message in self.user_client.get_chat_history(
-                    source_channel,
-                    limit=100,
-                    offset=len(messages),
-                    offset_id=current_id
-                ):
-                    if message.id <= last_forwarded_id:
-                        return messages
-                    batch.append(message)
-                
-                if not batch:
+                else:
                     break
-                
-                messages.extend(batch)
-                current_id = batch[-1].id
-                
-                # Small delay to prevent flooding
-                await asyncio.sleep(0.1)
             
             return messages
 
@@ -198,7 +177,7 @@ class HybridForwarder:
             return []
 
     async def scan_and_forward(self, set_name):
-        """Optimized scanning and forwarding"""
+        """Process new messages for a channel set"""
         if self.forwarding_active:
             logger.warning("Forwarding already in progress")
             return 0
@@ -216,10 +195,9 @@ class HybridForwarder:
             if not new_messages:
                 return 0
 
-            # Process messages in chronological order (oldest first)
+            # Process in chronological order (oldest first)
             for message in reversed(new_messages):
                 try:
-                    # Skip service messages and empty messages quickly
                     if message.service or (not message.text and not message.caption and not message.media):
                         continue
                     
@@ -228,87 +206,61 @@ class HybridForwarder:
                     if not subject or subject not in destinations:
                         continue
                     
-                    # Forward the message
                     await self.bot_client.copy_message(
                         chat_id=destinations[subject],
                         from_chat_id=source_channel,
                         message_id=message.id
                     )
                     
-                    # Update state after each successful forward
                     await self.save_state(set_name, message.id)
                     forwarded_count += 1
-                    
-                    # Minimal delay between forwards
-                    await asyncio.sleep(0.3)
+                    await asyncio.sleep(0.3)  # Rate limit
                     
                 except RPCError as e:
-                    logger.error(f"Failed to forward message {message.id}: {e}")
-                    continue
+                    logger.error(f"Forward failed for {message.id}: {e}")
                 except Exception as e:
-                    logger.error(f"Error processing message {message.id}: {e}")
-                    continue
+                    logger.error(f"Error processing {message.id}: {e}")
 
             return forwarded_count
             
         finally:
             self.forwarding_active = False
-            logger.info(f"Forwarding completed for {set_name}. Total forwarded: {forwarded_count}")
+            logger.info(f"Completed forwarding for {set_name}: {forwarded_count}")
 
     async def handle_forward(self, message: Message):
-        """Handle the /forward command with improved response"""
+        """Handle /forward command"""
         try:
             if message.from_user.id != YOUR_USER_ID:
-                await message.reply("🚨 **ACCESS DENIED** 🚨\n\n`Unauthorized user detected`")
-                return
+                return await message.reply("🚨 Access denied")
             
             if not self.initialized:
-                await message.reply("⚡ **SYSTEM INITIALIZATION REQUIRED**")
-                return
+                return await message.reply("⚡ Initializing...")
             
-            processing_msg = await message.reply("🛰️ **SCANNING CHANNELS**\n\n`Processing request...`")
+            start_time = time.time()
+            processing_msg = await message.reply("🔄 Processing...")
             
-            response = "📡 **FORWARDING REPORT**\n\n"
             total_forwarded = 0
-            
             for set_name in CHANNEL_CONFIGS:
-                start_time = time.time()
-                forwarded_count = await self.scan_and_forward(set_name)
-                elapsed = time.time() - start_time
-                
-                if forwarded_count > 0:
-                    response += f"✅ **{set_name}**\n`Forwarded:` {forwarded_count} messages\n`Time:` {elapsed:.2f}s\n\n"
-                    total_forwarded += forwarded_count
-                else:
-                    last_id = await self.load_state(set_name)
-                    async for msg in self.user_client.get_chat_history(CHANNEL_CONFIGS[set_name]["SOURCE"], limit=1):
-                        current_id = msg.id
-                        break
-                    response += f"ℹ️ **{set_name}**\n`Status:` Up to date\n`Last ID:` {last_id}\n`Current ID:` {current_id}\n\n"
+                count = await self.scan_and_forward(set_name)
+                total_forwarded += count
             
-            response += f"✨ **TOTAL FORWARDED:** {total_forwarded} messages\n"
-            response += f"⏱️ **PROCESS TIME:** {time.time() - self.start_time:.2f}s"
-            
-            await processing_msg.edit_text(response)
+            elapsed = time.time() - start_time
+            await processing_msg.edit_text(
+                f"✅ Forwarded {total_forwarded} messages\n"
+                f"⏱️ Took {elapsed:.2f} seconds"
+            )
             
         except Exception as e:
-            error_msg = f"""
-⚠️ **ERROR** ⚠️
-
-`{type(e).__name__}: {str(e)}`
-"""
-            await message.reply(error_msg)
-            logger.error(f"Error in handle_forward: {e}")
+            await message.reply(f"⚠️ Error: {str(e)}")
+            logger.error(f"Forward error: {e}")
 
     async def handle_channels(self, message: Message):
-        """Handle /channels command to list all configured channels"""
+        """Handle /channels command"""
         try:
             if message.from_user.id != YOUR_USER_ID:
-                await message.reply("🚨 **ACCESS DENIED**")
-                return
+                return await message.reply("🚨 Access denied")
             
-            response = "📚 **CHANNEL CONFIGURATIONS**\n\n"
-            
+            response = "📚 Configured Channels:\n\n"
             for set_name, config in CHANNEL_CONFIGS.items():
                 try:
                     chat = await self.user_client.get_chat(config["SOURCE"])
@@ -316,9 +268,8 @@ class HybridForwarder:
                 except:
                     source_name = "Unknown"
                 
-                response += f"🔷 **{set_name}**\n"
-                response += f"`Source:` {source_name} (`{config['SOURCE']}`)\n"
-                response += "`Destinations:`\n"
+                response += f"🔹 **{set_name}**\nSource: {source_name}\n"
+                response += "Destinations:\n"
                 
                 for subject, channel_id in config["DESTINATIONS"].items():
                     try:
@@ -326,42 +277,29 @@ class HybridForwarder:
                         dest_name = dest_chat.title
                     except:
                         dest_name = "Unknown"
-                    response += f"  • {subject}: {dest_name} (`{channel_id}`)\n"
+                    response += f"- {subject}: {dest_name}\n"
                 
                 response += "\n"
             
             await message.reply(response)
             
         except Exception as e:
-            await message.reply(f"⚠️ Error listing channels: {str(e)}")
-            logger.error(f"Error in handle_channels: {e}")
+            await message.reply(f"⚠️ Error: {str(e)}")
+            logger.error(f"Channels error: {e}")
 
     async def run(self):
-        """Main bot loop"""
+        """Main bot loop - Minimal initialization"""
         await self.initialize()
-        
-        if not self.initialized:
-            logger.critical("Bot failed to initialize properly")
-            return
-            
-        logger.info("Bot is running. Commands: /forward, /channels")
-        
-        # Keep the bot running
+        logger.info("Bot ready for commands")
         while True:
-            try:
-                await asyncio.sleep(3600)
-            except asyncio.CancelledError:
-                logger.info("Shutting down gracefully...")
-                break
-            except Exception as e:
-                logger.error(f"Unexpected error in main loop: {e}")
-                await asyncio.sleep(60)
+            await asyncio.sleep(3600)
 
 if __name__ == "__main__":
     hybrid = HybridForwarder()
     try:
         asyncio.run(hybrid.run())
     except KeyboardInterrupt:
-        logger.info("Bot stopped by user")
+        logger.info("Bot stopped")
     except Exception as e:
         logger.critical(f"Fatal error: {e}")
+
