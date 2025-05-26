@@ -20,7 +20,7 @@ YOUR_USER_ID = 2031106491
 
 # Channel configurations
 CHANNEL_CONFIGS = {
-    "SET_1": {
+    "Yakeen 2.0": {
         "SOURCE": -1002027394591,
         "DESTINATIONS": {
             'Physics': -1002611033664,
