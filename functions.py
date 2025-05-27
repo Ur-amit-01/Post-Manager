@@ -121,8 +121,8 @@ class HybridForwarder:
         except Exception as e:
             logger.error(f"Error saving state: {e}")
 
-    async def get_new_messages(self, source_channel, last_forwarded_id):
-        """Get messages newer than last_forwarded_id"""
+    async def get_new_messages(self, source_channel, last_forwardeded_id):
+        """Get messages newer than last_forwardeded_id"""
         try:
             messages = []
             current_last_id = await self.get_last_message_id(source_channel)
@@ -141,7 +141,7 @@ class HybridForwarder:
             ):
                 if message.id > last_forwarded_id:
                     all_messages.append(message)
-                elif message.id <= last_forward_id:
+                elif message.id <= last_forwarded_id:
                     break
                 
                 # Small delay to avoid flooding
