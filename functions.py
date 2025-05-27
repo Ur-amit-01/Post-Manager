@@ -134,19 +134,20 @@ class HybridForwarder:
             logger.info(f"Fetching messages between {last_forwarded_id} and {current_last_id}")
             
             # Fetch messages in reverse order (newest first)
+            all_messages = []
             async for message in self.user_client.get_chat_history(
                 source_channel,
                 limit=None,  # Get all available messages
-                offset_id=last_forwarded_id
             ):
                 if message.id > last_forwarded_id:
-                    messages.append(message)
-                else:
+                    all_messages.append(message)
+                elif message.id <= last_forward_id:
                     break
                 
                 # Small delay to avoid flooding
                 await asyncio.sleep(0.1)
-            
+
+            messages = sorted(all_messages, key=lambda m: m.id)
             logger.info(f"Found {len(messages)} new messages")
             return messages
 
