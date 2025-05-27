@@ -145,7 +145,7 @@ class HybridForwarder:
                     break
                 
                 # Small delay to avoid flooding
-                await asyncio.sleep(0.1)
+                #await asyncio.sleep(0.1)
 
             messages = sorted(all_messages, key=lambda m: m.id)
             logger.info(f"Found {len(messages)} new messages")
@@ -251,7 +251,7 @@ class HybridForwarder:
                     logger.info(f"Forwarded message {message.id} to {subject}")
                     
                     # Small delay to avoid rate limits
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(0.1)
                     
                 except RPCError as e:
                     logger.error(f"Failed to forward message {message.id}: {e}")
