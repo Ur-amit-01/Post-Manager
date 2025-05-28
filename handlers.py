@@ -9,7 +9,43 @@ class CommandHandlers:
         self.user_client = user_client
         self.config = config
         
+    async def handle_start(self, _, message: Message):
+        """Handle the /start command"""
+        start_message = (
+            "🤖 **Welcome to the Channel Forwarder Bot**\n\n"
+            "I can automatically forward messages from source channels "
+            "to their appropriate destination channels based on content.\n\n"
+            "🔹 **Available Commands:**\n"
+            "/start - Show this welcome message\n"
+            "/help - Show help information\n"
+            "/forward - Start forwarding messages\n"
+            "/channels - List configured channels\n\n"
+            "⚙️ **Admin Only:**\n"
+            "Only authorized users can use admin commands."
+        )
+        await message.reply(start_message)
+    
+    async def handle_help(self, _, message: Message):
+        """Handle the /help command"""
+        help_message = (
+            "🆘 **Help Guide**\n\n"
+            "This bot forwards messages from source channels to subject-specific "
+            "destination channels automatically.\n\n"
+            "📋 **Commands:**\n"
+            "- /start - Welcome message\n"
+            "- /help - This help guide\n"
+            "- /forward - Manually trigger forwarding\n"
+            "- /channels - List all configured channels\n\n"
+            "🔒 **Permissions:**\n"
+            "Most commands require admin privileges.\n\n"
+            "⏱ **Automatic Forwarding:**\n"
+            "The bot checks for new messages periodically and forwards them "
+            "based on their content."
+        )
+        await message.reply(help_message)
+    
     async def handle_forward(self, _, message: Message):
+        """Handle the /forward command"""
         try:
             if message.from_user.id != self.config.YOUR_USER_ID:
                 return await message.reply("🚨 Access denied")
@@ -45,6 +81,7 @@ class CommandHandlers:
             await message.reply(f"⚠️ Error during forwarding: {str(e)}")
     
     async def handle_channels(self, _, message: Message):
+        """Handle the /channels command"""
         try:
             if message.from_user.id != self.config.YOUR_USER_ID:
                 return await message.reply("🚨 Access denied")
@@ -77,5 +114,8 @@ class CommandHandlers:
             await message.reply(f"⚠️ Error listing channels: {str(e)}")
     
     def register_handlers(self):
+        """Register all command handlers"""
+        self.bot_client.on_message(filters.command("start") & filters.private)(self.handle_start)
+        self.bot_client.on_message(filters.command("help") & filters.private)(self.handle_help)
         self.bot_client.on_message(filters.command("forward") & filters.private)(self.handle_forward)
         self.bot_client.on_message(filters.command("channels") & filters.private)(self.handle_channels)
