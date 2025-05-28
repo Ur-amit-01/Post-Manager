@@ -11,7 +11,7 @@ DB_URL = os.environ.get("DB_URL","mongodb+srv://uramit0001:EZ1u5bfKYZ52XeGT@clus
 ADMIN = [int(admin) if id_pattern.search(admin) else admin for admin in os.environ.get('ADMIN', '2031106491 1519459773').split()]
 PORT = os.environ.get("PORT", "8080")
 
-SESSION_STRING = os.environ.get("SESSION_STRING", "")
+USER_SESSION_STRING = os.environ.get("SESSION_STRING", "")
 
 FORCE_PIC = os.environ.get("FORCE_PIC", "https://telegra.ph/file/e292b12890b8b4b9dcbd1.jpg")
 AUTH_CHANNEL = [int(ch) if id_pattern.search(ch) else ch for ch in environ.get('AUTH_CHANNEL', '-1002385466192').split()] #Ex : ('-10073828 -102782829 -1007282828')
