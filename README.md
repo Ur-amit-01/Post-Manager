@@ -24,15 +24,6 @@
 </div>
 
 
-
-### 🥰 Features
- * Kuchh nahj
-### 🚦 Commands
-```
-
-```
-
-
 ### 📶 DEPLOYEMENT SUPPORT
 
 <summary>🔥 Deploy To Koyeb 🔥</summary>
