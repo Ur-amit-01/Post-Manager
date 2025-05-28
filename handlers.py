@@ -1,6 +1,7 @@
 from pyrogram import filters
 from pyrogram.types import Message
 from typing import Dict
+from config import *
 
 class CommandHandlers:
     def __init__(self, bot_client, forwarder, user_client, config):
