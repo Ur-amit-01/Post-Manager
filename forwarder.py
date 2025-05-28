@@ -4,6 +4,7 @@ from pyrogram import Client
 from pyrogram.errors import RPCError
 from Sorting import matcher
 from typing import Dict, List
+from config import *
 
 class MessageForwarder:
     def __init__(self, user_client: Client, bot_client: Client, db_manager):
