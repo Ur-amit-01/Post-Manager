@@ -26,27 +26,11 @@
 
 
 ### 🥰 Features
- * Restricted content saver 
- * Accept pending join requests
- * Manage TG Posts
-
+ * Kuchh nahj
 ### 🚦 Commands
 ```
 
 ```
-
-### ⚡️ Configs 
-* `BOT_TOKEN`  - Get bot token from @BotFather
-* `API_ID` - Get api id From my.telegram.org 
-* `API_HASH` - From my.telegram.org 
-* `ADMIN` - AUTH or bot controllers id's multiple id use space to split 
-* `DB_URL`  - Mongo Database URL from https://cloud.mongodb.com/
-* `DB_NAME`  - Your database name from mongoDB. Default will be 'Z900'
-* `START_PIC` - start message photo
-* `Port` - 8080
-* `FORCE_PIC`
-* `LOG_CHANNEL`
-* `AUTH_CHANNEL`
 
 
 ### 📶 DEPLOYEMENT SUPPORT
@@ -62,9 +46,3 @@
 #### 🧡 Credits... 🧡
 - [🔥 AMIT SINGH](https://github.com/Ur_Amit_01) 
 - [🔥 Pyrogram](https://github.com/pyrogram/pyrogram)
-
-
-### 🤩 INSPIRATION
-<a href="#">
-   <p>❣️ Lazy Dev 🔥</p>
-</a>
