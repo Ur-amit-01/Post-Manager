@@ -2,6 +2,7 @@ import re
 from typing import Dict, Set, Optional
 from fuzzywuzzy import fuzz, process
 from Chapters import CHAPTER_DATA
+from config import *
 
 class ContentMatcher:
     def __init__(self):
