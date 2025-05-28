@@ -3,12 +3,11 @@ from pyrogram.types import Message
 from typing import Dict
 
 class CommandHandlers:
-    def __init__(self, bot_client, forwarder, user_client, your_user_id, channel_configs):
+    def __init__(self, bot_client, forwarder, user_client, config):
         self.bot_client = bot_client
         self.forwarder = forwarder
         self.user_client = user_client
-        self.YOUR_USER_ID = your_user_id
-        self.CHANNEL_CONFIGS = channel_configs
+        self.config = config
         
     async def handle_start(self, _, message: Message):
         """Handle the /start command"""
