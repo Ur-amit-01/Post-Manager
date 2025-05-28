@@ -5,6 +5,7 @@ from pymongo import MongoClient
 import config
 import asyncio
 import random
+import re
 
 QUALITIES = {
     "240p": "240",
@@ -71,6 +72,29 @@ def transform_pw_link(url: str, quality: str) -> str:
         f".gs1PjfPwzf9ja0OQz7ay7qyysZy-4BDILn-nBbwFAcc"
     )
 
+def transform_mpd_link(url: str, quality: str) -> str:
+    """Transform MPD link with selected quality"""
+    parsed = urlparse(url)
+    params = parse_qs(parsed.query)
+    
+    if not (token := get_token()):
+        return "Error: No token found. Please set a token using /token command."
+    
+    child_id = params.get('childId', [''])[0]
+    parent_id = params.get('parentId', [''])[0]
+    
+    if not child_id or not parent_id:
+        return "Error: Could not extract required parameters from the MPD link."
+    
+    return (
+        f"http://master-api-v3.vercel.app/pw/m3u8v2?"
+        f"childId={child_id}&"
+        f"parentId={parent_id}&"
+        f"token={token}&q={quality}&authorization=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
+        f".eyJ1c2VyX2lkIjoiZnJlZSB1c2VyICIsInRnX3VzZXJuYW1lIjoiUFVCTElDIFVTRSAiLCJpYXQiOjE3NDY3MzExNzJ9"
+        f".gs1PjfPwzf9ja0OQz7ay7qyysZy-4BDILn-nBbwFAcc"
+    )
+
 @Client.on_message(filters.command("token") & filters.user(config.ADMIN))
 async def set_token(client: Client, message: Message):
     """Handle /token command (admin only)"""    
@@ -122,14 +146,19 @@ async def handle_amit_command(client: Client, message: Message):
     if text == "/amit":
         example_text = (
             "> **Send links in this format 👇🏻**\n"
-            "> **/amit https://pw.live/watch?v=abc123&bat**"
+            "> **/amit https://pw.live/watch?v=abc123&bat**\n"
+            "> **or**\n"
+            "> **/amit https://d1d34p8vz63oiq.cloudfront.net/.../master.mpd?childId=...&parentId=...**"
         )
         await message.reply_text(example_text)
         return
     
-    # If /amit with URL is sent
+    # Check for PW Live link
     if "pw.live/watch" in text:
-        user_data[user_id] = {"url": text.replace("/amit", "").strip()}
+        user_data[user_id] = {
+            "url": text.replace("/amit", "").strip(),
+            "link_type": "pw_live"
+        }
         await message.reply_text(
             "**Please select your preferred quality:🎦**",
             reply_markup=InlineKeyboardMarkup([
@@ -137,6 +166,21 @@ async def handle_amit_command(client: Client, message: Message):
                 for q, q_data in QUALITIES.items()
             ])
         )
+    # Check for MPD link
+    elif "d1d34p8vz63oiq.cloudfront.net" in text and "master.mpd" in text:
+        user_data[user_id] = {
+            "url": text.replace("/amit", "").strip(),
+            "link_type": "mpd"
+        }
+        await message.reply_text(
+            "**Please select your preferred quality:🎦**",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton(q, callback_data=q_data)] 
+                for q, q_data in QUALITIES.items()
+            ])
+        )
+    else:
+        await message.reply_text("❌ Unsupported link format. Please send a valid PW Live or MPD link.")
 
 @Client.on_callback_query()
 async def handle_callback(client, callback):
@@ -144,8 +188,16 @@ async def handle_callback(client, callback):
     user_id = callback.from_user.id
     
     if user_id in user_data and "url" in user_data[user_id]:
-        transformed_url = transform_pw_link(user_data[user_id]["url"], callback.data)
+        link_type = user_data[user_id].get("link_type", "pw_live")
         
+        if link_type == "pw_live":
+            transformed_url = transform_pw_link(user_data[user_id]["url"], callback.data)
+        elif link_type == "mpd":
+            transformed_url = transform_mpd_link(user_data[user_id]["url"], callback.data)
+        else:
+            await callback.message.edit_text("❌ Error: Unknown link type")
+            return
+            
         if transformed_url.startswith("Error:"):
             await callback.message.edit_text(transformed_url)
             return
@@ -156,8 +208,9 @@ async def handle_callback(client, callback):
                 "first_name": callback.from_user.first_name
             },
             "transformed_url": transformed_url,
-            "quality": f"{callback.data}p"
-        }))
+            "quality": f"{callback.data}p",
+            "link_type": link_type
+        })
         
         # Send the transformed URL
         msg = await callback.message.edit_text(
@@ -173,4 +226,3 @@ async def handle_callback(client, callback):
         del user_data[user_id]
     
     await callback.answer()
-
