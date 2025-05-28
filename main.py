@@ -44,7 +44,7 @@ class HybridForwarder:
             await self.initialize_clients()
             
             self.forwarder = MessageForwarder(self.user_client, self.bot_client, self.db_manager)
-            self.handlers = CommandHandlers(self.bot_client, self.forwarder, self.user_client, self.config)
+            self.handlers = CommandHandlers(self.bot_client, self.forwarder, self.user_client)
             self.handlers.register_handlers()
             
             self.logger.info("Bot initialized successfully")
