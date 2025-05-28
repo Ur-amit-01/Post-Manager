@@ -1,6 +1,6 @@
 import asyncio
 from pyrogram import Client
-from config import API_ID, API_HASH, BOT_TOKEN, SESSION_STRING
+from config import API_ID, API_HASH, BOT_TOKEN, SESSION_STRING, YOUR_USER_ID, CHANNEL_CONFIGS
 from database import DatabaseManager
 from forwarder import MessageForwarder
 from handlers import CommandHandlers
