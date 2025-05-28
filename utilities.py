@@ -1,4 +1,5 @@
 from typing import Optional, Dict, Any
+from config import *
 
 def format_response(title: str, data: Dict[str, Any]) -> str:
     """Format a response message with title and data"""
