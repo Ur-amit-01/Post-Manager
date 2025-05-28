@@ -25,7 +25,6 @@
 
 
 ### 📶 DEPLOYEMENT SUPPORT
-
 <p>
 <br>                 
 <a target="/blank" href="https://app.koyeb.com/deploy?type=git&repository=github.com/LazyDeveloperr/Gangster-Baby-Renamer-BOT&branch=main&name=lazy-gangster-baby" >
@@ -34,5 +33,4 @@
 </p>
 
 #### 🧡 Credits... 🧡
-- [🔥 AMIT SINGH](https://github.com/Ur_Amit_01) 
-- [🔥 Pyrogram](https://github.com/pyrogram/pyrogram)
+- [🔥 AMIT SINGH](https://t.me/Ur_Amit_01)
