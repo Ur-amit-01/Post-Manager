@@ -477,7 +477,7 @@ async def quick_add_callback(client: Client, callback_query: CallbackQuery):
     await callback_query.answer()
 
 # Message handler for quick add
-@app.on_message(filters.private & ~filters.command())
+@app.on_message(filters.private & ~filters.command(["start", "menu", "add", "help"]))
 async def handle_quick_add(client: Client, message: Message):
     if message.reply_to_message and "Type your task quickly" in message.reply_to_message.text:
         user = message.from_user
