@@ -147,7 +147,7 @@ async def subject_selected(client: Client, callback: CallbackQuery):
     )
     await callback.answer()
 
-@app.on_message(filters.text & ~filters.command)
+@app.on_message(filters.text & ~filters.regex(r"^/"))
 async def handle_text_input(client: Client, message: Message):
     user_id = message.from_user.id
     if user_id not in user_states:
