@@ -1,488 +1,340 @@
 import os
+import asyncio
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
-from enum import Enum
-from pymongo import MongoClient, ReturnDocument
+from typing import Dict, Optional, List
+
 from pyrogram import Client, filters
 from pyrogram.types import (
-    Message,
-    InlineKeyboardMarkup,
+    Message, 
+    InlineKeyboardMarkup, 
     InlineKeyboardButton,
-    CallbackQuery,
-    ReplyKeyboardMarkup,
-    ReplyKeyboardRemove
+    CallbackQuery
 )
+from pymongo import MongoClient
+from dotenv import load_dotenv
 from config import *
+# Load environment variables
+load_dotenv()
 
-# MongoDB setup
+# --- Configuration --- #
+class Config:
+    REVIEW_SCHEDULE = [1, 4, 7, 15, 30]  # Spaced repetition intervals
+    PRIORITY_EMOJIS = {1: "🔥", 2: "🔼", 3: "🔽"}
+    PRIORITY_NAMES = {1: "High", 2: "Medium", 3: "Low"}
+    SUBJECTS = ["Physics", "Chemistry", "Biology", "Other"]
+
+# --- MongoDB Setup --- #
 mongo_client = MongoClient(DB_URL)
-db = mongo_client.todo_bot
-users_col = db.users
-tasks_col = db.tasks
-categories_col = db.categories
+db = mongo_client[DB_NAME]
+users_collection = db["users"]
+tasks_collection = db["tasks"]
 
-# Enums
-class Priority(Enum):
-    HIGH = 1
-    MEDIUM = 2
-    LOW = 3
+# Ensure indexes
+tasks_collection.create_index([("user_id", 1)])
+tasks_collection.create_index([("next_review", 1)])
+tasks_collection.create_index([("user_id", 1), ("completed_date", 1)])
 
-class TaskStatus(Enum):
-    ACTIVE = "active"
-    COMPLETED = "completed"
-    ARCHIVED = "archived"
+# --- Bot Setup --- #
+app = Client("neet_study_bot", bot_token=BOT_TOKEN)
 
-# Initialize the bot
-app = Client("ultimate_todo_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+# --- State Management --- #
+user_states: Dict[int, Dict] = {}
 
-# Helper functions
-def get_current_datetime() -> datetime:
-    return datetime.now()
-
-def ensure_user_exists(user_id: int, username: str, first_name: str, last_name: str = ""):
-    users_col.update_one(
-        {"_id": user_id},
-        {"$setOnInsert": {
-            "username": username,
-            "first_name": first_name,
-            "last_name": last_name,
-            "created_at": get_current_datetime(),
-            "settings": {
-                "default_priority": Priority.MEDIUM.value,
-                "timezone": "UTC",
-                "daily_reminder": False,
-                "weekly_report": True
-            }
-        }},
-        upsert=True
-    )
-
-def get_user_categories(user_id: int) -> List[Dict]:
-    return list(categories_col.find({"user_id": user_id}))
-
-def get_user_tasks(user_id: int, status: str = TaskStatus.ACTIVE.value, category: str = None) -> List[Dict]:
-    query = {"user_id": user_id, "status": status}
-    if category:
-        query["category"] = category
-    
-    return list(tasks_col.find(query).sort([
-        ("priority", 1),
-        ("due_date", 1),
-        ("created_at", 1)
-    ]))
-
-def create_task(user_id: int, text: str, priority: int = None, due_date: datetime = None, category: str = None) -> Dict:
-    if priority is None:
-        user = users_col.find_one({"_id": user_id})
-        priority = user.get("settings", {}).get("default_priority", Priority.MEDIUM.value)
-    
-    task_data = {
-        "user_id": user_id,
-        "text": text,
-        "priority": priority,
-        "status": TaskStatus.ACTIVE.value,
-        "created_at": get_current_datetime(),
-        "completed_at": None,
-        "category": category
-    }
-    
-    if due_date:
-        task_data["due_date"] = due_date
-    
-    return tasks_col.insert_one(task_data).inserted_id
-
-def update_task(task_id: str, update_data: Dict) -> Optional[Dict]:
-    return tasks_col.find_one_and_update(
-        {"_id": task_id},
-        {"$set": update_data},
-        return_document=ReturnDocument.AFTER
-    )
-
-def delete_task(task_id: str) -> bool:
-    result = tasks_col.delete_one({"_id": task_id})
-    return result.deleted_count > 0
-
-# Keyboard builders
-def build_main_menu() -> InlineKeyboardMarkup:
+# --- Keyboard Utilities --- #
+def main_menu_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
+        [InlineKeyboardButton("➕ Add Task", callback_data="add_task")],
         [
-            InlineKeyboardButton("📝 My Tasks", callback_data="view_tasks"),
-            InlineKeyboardButton("📊 Stats", callback_data="view_stats")
+            InlineKeyboardButton("✅ Completed", callback_data="mark_completed"),
+            InlineKeyboardButton("📚 View Tasks", callback_data="view_tasks")
         ],
-        [
-            InlineKeyboardButton("⚙️ Settings", callback_data="view_settings"),
-            InlineKeyboardButton("📚 Categories", callback_data="view_categories")
-        ],
-        [
-            InlineKeyboardButton("➕ Quick Add", callback_data="quick_add"),
-            InlineKeyboardButton("🆘 Help", callback_data="view_help")
-        ]
+        [InlineKeyboardButton("📊 Progress", callback_data="view_progress")]
     ])
 
-def build_tasks_keyboard(tasks: List[Dict], page: int = 0, page_size: int = 5) -> InlineKeyboardMarkup:
-    keyboard = []
-    
-    # Paginate tasks
-    start_idx = page * page_size
-    paginated_tasks = tasks[start_idx:start_idx + page_size]
-    
-    for task in paginated_tasks:
-        emoji = "✅" if task["status"] == TaskStatus.COMPLETED.value else "⬜"
-        priority_emoji = ""
-        if task["priority"] == Priority.HIGH.value:
-            priority_emoji = "🔥 "
-        elif task["priority"] == Priority.LOW.value:
-            priority_emoji = "🐢 "
-        
-        keyboard.append([
-            InlineKeyboardButton(
-                f"{emoji} {priority_emoji}{task['text'][:20]}",
-                callback_data=f"view_task_{task['_id']}"
-            )
-        ])
-    
-    # Pagination controls
-    pagination_row = []
-    if page > 0:
-        pagination_row.append(InlineKeyboardButton("⬅️ Prev", callback_data=f"tasks_page_{page-1}"))
-    
-    if len(tasks) > start_idx + page_size:
-        pagination_row.append(InlineKeyboardButton("Next ➡️", callback_data=f"tasks_page_{page+1}"))
-    
-    if pagination_row:
-        keyboard.append(pagination_row)
-    
-    # Action buttons
-    action_row = [
-        InlineKeyboardButton("➕ Add Task", callback_data="add_task"),
-        InlineKeyboardButton("🗂 Filter", callback_data="filter_tasks")
-    ]
-    keyboard.append(action_row)
-    
-    # Navigation
-    keyboard.append([InlineKeyboardButton("🔙 Main Menu", callback_data="main_menu")])
-    
-    return InlineKeyboardMarkup(keyboard)
+def subject_kb() -> InlineKeyboardMarkup:
+    buttons = []
+    for subject in Config.SUBJECTS:
+        buttons.append([InlineKeyboardButton(subject, callback_data=f"subject_{subject}")])
+    return InlineKeyboardMarkup(buttons)
 
-def build_task_detail_keyboard(task_id: str) -> InlineKeyboardMarkup:
+def priority_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("✅ Complete", callback_data=f"complete_task_{task_id}"),
-            InlineKeyboardButton("✏️ Edit", callback_data=f"edit_task_{task_id}")
-        ],
-        [
-            InlineKeyboardButton("📅 Set Due", callback_data=f"set_due_{task_id}"),
-            InlineKeyboardButton("🏷 Category", callback_data=f"set_category_{task_id}")
-        ],
-        [
-            InlineKeyboardButton("🔥 Priority", callback_data=f"set_priority_{task_id}"),
-            InlineKeyboardButton("🗑 Delete", callback_data=f"delete_task_{task_id}")
-        ],
-        [InlineKeyboardButton("🔙 Back", callback_data="view_tasks")]
+        [InlineKeyboardButton(f"{Config.PRIORITY_EMOJIS[1]} High Priority", callback_data="priority_1")],
+        [InlineKeyboardButton(f"{Config.PRIORITY_EMOJIS[2]} Medium Priority", callback_data="priority_2")],
+        [InlineKeyboardButton(f"{Config.PRIORITY_EMOJIS[3]} Low Priority", callback_data="priority_3")]
     ])
 
-def build_priority_keyboard(task_id: str) -> InlineKeyboardMarkup:
+def review_kb(task_id: str, stage: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("🔥 High", callback_data=f"priority_{task_id}_1"),
-            InlineKeyboardButton("🔼 Medium", callback_data=f"priority_{task_id}_2")
-        ],
-        [
-            InlineKeyboardButton("🐢 Low", callback_data=f"priority_{task_id}_3"),
-            InlineKeyboardButton("🚫 None", callback_data=f"priority_{task_id}_0")
-        ],
-        [InlineKeyboardButton("🔙 Back", callback_data=f"view_task_{task_id}")]
+        [InlineKeyboardButton("✅ Reviewed", callback_data=f"reviewed_{task_id}_{stage}")],
+        [InlineKeyboardButton("⏰ Remind Later", callback_data=f"postpone_{task_id}")]
     ])
 
-def build_categories_keyboard(user_id: int, task_id: str = None) -> InlineKeyboardMarkup:
-    categories = get_user_categories(user_id)
-    keyboard = []
-    
-    # Add existing categories
-    for category in categories:
-        callback = f"apply_category_{task_id}_{category['_id']}" if task_id else f"select_category_{category['_id']}"
-        keyboard.append([InlineKeyboardButton(f"🏷 {category['name']}", callback_data=callback)])
-    
-    # Add management buttons
-    if task_id:
-        keyboard.append([
-            InlineKeyboardButton("➕ New Category", callback_data="new_category"),
-            InlineKeyboardButton("🔙 Back", callback_data=f"view_task_{task_id}")
-        ])
-    else:
-        keyboard.append([
-            InlineKeyboardButton("➕ New Category", callback_data="new_category"),
-            InlineKeyboardButton("🔙 Main Menu", callback_data="main_menu")
-        ])
-    
-    return InlineKeyboardMarkup(keyboard)
+def task_action_kb(task_id: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ Mark Completed", callback_data=f"complete_{task_id}")],
+        [InlineKeyboardButton("✏️ Edit Task", callback_data=f"edit_{task_id}")],
+        [InlineKeyboardButton("🗑️ Delete Task", callback_data=f"delete_{task_id}")]
+    ])
 
-# Message formatters
+# --- Helper Functions --- #
 def format_task(task: Dict) -> str:
-    emoji = "✅" if task["status"] == TaskStatus.COMPLETED.value else "⬜"
+    status = "✅" if task.get("completed_date") else "🟡"
+    priority = Config.PRIORITY_EMOJIS.get(task.get("priority", 2), "")
     
-    priority_map = {
-        Priority.HIGH.value: "🔥 HIGH PRIORITY",
-        Priority.MEDIUM.value: "🔼 MEDIUM PRIORITY",
-        Priority.LOW.value: "🐢 LOW PRIORITY"
-    }
-    priority_text = priority_map.get(task.get("priority"), "")
+    text = f"{status} {priority} **{task['subject']} - {task['topic']}**\n"
+    text += f"📝 {task['details']}\n"
     
-    due_text = ""
-    if "due_date" in task:
-        due_date = task["due_date"]
-        if isinstance(due_date, str):
-            due_date = datetime.fromisoformat(due_date)
-        
-        delta = due_date - get_current_datetime()
-        if delta.days < 0:
-            due_text = f"\n⚠️ OVERDUE by {-delta.days} days"
-        elif delta.days == 0:
-            due_text = "\n⏰ Due today!"
-        else:
-            due_text = f"\n📅 Due in {delta.days} days"
+    if task.get("completed_date"):
+        text += f"📅 Completed: {task['completed_date'].strftime('%d %b %Y')}\n"
+        if task.get("next_review"):
+            text += f"🔁 Next Review: {task['next_review'].strftime('%d %b %Y')}\n"
     
-    category_text = f"\n🏷 Category: {task.get('category', 'Uncategorized')}" if task.get("category") else ""
-    
-    created_at = task["created_at"]
-    if isinstance(created_at, str):
-        created_at = datetime.fromisoformat(created_at)
-    created_text = f"\n🕒 Created: {created_at.strftime('%b %d, %Y %H:%M')}"
-    
-    return (
-        f"{emoji} <b>{task['text']}</b>\n\n"
-        f"{priority_text}{due_text}{category_text}{created_text}"
-    )
+    return text
 
-def format_task_list(tasks: List[Dict]) -> str:
-    if not tasks:
-        return "No tasks found! Use the buttons below to add one."
-    
-    today = get_current_datetime().strftime("%A, %B %d, %Y")
-    message = [f"📅 <b>Your Tasks - {today}</b>\n"]
-    
-    for i, task in enumerate(tasks, 1):
-        emoji = "✅" if task["status"] == TaskStatus.COMPLETED.value else "⬜"
-        priority_emoji = ""
-        if task["priority"] == Priority.HIGH.value:
-            priority_emoji = "🔥 "
-        elif task["priority"] == Priority.LOW.value:
-            priority_emoji = "🐢 "
-        
-        message.append(f"{i}. {emoji} {priority_emoji}{task['text'][:50]}")
-        
-        if "due_date" in task:
-            due_date = task["due_date"]
-            if isinstance(due_date, str):
-                due_date = datetime.fromisoformat(due_date)
-            
-            delta = due_date - get_current_datetime()
-            if delta.days < 0:
-                message.append(f"   ⚠️ OVERDUE by {-delta.days} days")
-            elif delta.days == 0:
-                message.append("   ⏰ Due today!")
-    
-    return "\n".join(message)
+def schedule_next_review(current_stage: int) -> Optional[datetime]:
+    if current_stage >= len(Config.REVIEW_SCHEDULE):
+        return None
+    return datetime.now() + timedelta(days=Config.REVIEW_SCHEDULE[current_stage])
 
-# Command handlers
-@app.on_message(filters.command(["start", "menu"]))
-async def start_command(client: Client, message: Message):
+# --- Command Handlers --- #
+@app.on_message(filters.command("start"))
+async def start(client: Client, message: Message):
     user = message.from_user
-    ensure_user_exists(user.id, user.username, user.first_name, user.last_name)
     
-    await message.reply_text(
-        f"🎯 <b>Welcome to your Ultimate To-Do Bot, {user.first_name}!</b>\n\n"
-        "What would you like to do today?",
-        reply_markup=build_main_menu()
-    )
+    # Add user to database if not exists
+    if not users_collection.find_one({"user_id": user.id}):
+        users_collection.insert_one({
+            "user_id": user.id,
+            "username": user.username,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "join_date": datetime.now(),
+            "last_active": datetime.now()
+        })
+    
+    welcome_msg = f"""
+    🎖 **Welcome {user.first_name} to NEET Study Tracker!** 🎖
 
-@app.on_message(filters.command("add"))
-async def add_task_command(client: Client, message: Message):
-    user = message.from_user
-    args = message.text.split(maxsplit=1)
-    
-    if len(args) < 2:
-        await message.reply_text(
-            "Please provide a task after /add command.\n"
-            "Example: <code>/add Buy milk tomorrow !!high</code>\n\n"
-            "Priority markers:\n"
-            "!!high 🔥\n"
-            "!!medium 🔼\n"
-            "!!low 🐢"
-        )
-        return
-    
-    # Parse task text (with optional priority and due date)
-    task_text = args[1]
-    priority = None
-    due_date = None
-    
-    # Check for priority markers
-    if " !!high" in task_text.lower():
-        priority = Priority.HIGH.value
-        task_text = task_text.replace(" !!high", "")
-    elif " !!medium" in task_text.lower():
-        priority = Priority.MEDIUM.value
-        task_text = task_text.replace(" !!medium", "")
-    elif " !!low" in task_text.lower():
-        priority = Priority.LOW.value
-        task_text = task_text.replace(" !!low", "")
-    
-    # Check for due date
-    if " tomorrow" in task_text.lower():
-        due_date = get_current_datetime() + timedelta(days=1)
-        task_text = task_text.replace(" tomorrow", "")
-    elif " today" in task_text.lower():
-        due_date = get_current_datetime()
-        task_text = task_text.replace(" today", "")
-    
-    # Create the task
-    task_id = create_task(user.id, task_text.strip(), priority, due_date)
-    
-    await message.reply_text(
-        f"Task added successfully!\n\n"
-        f"{format_task(tasks_col.find_one({'_id': task_id}))}",
-        reply_markup=build_task_detail_keyboard(task_id)
-    )
+    I'll help you:
+    - Track your study targets
+    - Remind you to revise using spaced repetition
+    - Monitor your progress
 
-# Callback handlers
-@app.on_callback_query(filters.regex("^main_menu$"))
-async def main_menu_callback(client: Client, callback_query: CallbackQuery):
-    await callback_query.message.edit_text(
-        "🎯 <b>Main Menu</b>\n\n"
-        "What would you like to do?",
-        reply_markup=build_main_menu()
-    )
-    await callback_query.answer()
-
-@app.on_callback_query(filters.regex("^view_tasks$"))
-async def view_tasks_callback(client: Client, callback_query: CallbackQuery):
-    user_id = callback_query.from_user.id
-    tasks = get_user_tasks(user_id)
+    **Choose an option below to get started:**
+    """
     
-    await callback_query.message.edit_text(
-        format_task_list(tasks),
-        reply_markup=build_tasks_keyboard(tasks)
-    )
-    await callback_query.answer()
+    await message.reply_text(welcome_msg, reply_markup=main_menu_kb())
 
-@app.on_callback_query(filters.regex("^tasks_page_"))
-async def tasks_page_callback(client: Client, callback_query: CallbackQuery):
-    page = int(callback_query.data.split("_")[2])
-    user_id = callback_query.from_user.id
-    tasks = get_user_tasks(user_id)
-    
-    await callback_query.message.edit_text(
-        format_task_list(tasks),
-        reply_markup=build_tasks_keyboard(tasks, page)
+# --- Callback Handlers --- #
+@app.on_callback_query(filters.regex("^add_task$"))
+async def add_task_cb(client: Client, callback: CallbackQuery):
+    user_states[callback.from_user.id] = {"action": "add_task", "step": "subject"}
+    await callback.message.edit_text(
+        "📚 **Select Subject:**",
+        reply_markup=subject_kb()
     )
-    await callback_query.answer()
+    await callback.answer()
 
-@app.on_callback_query(filters.regex("^view_task_"))
-async def view_task_callback(client: Client, callback_query: CallbackQuery):
-    task_id = callback_query.data.split("_")[2]
-    task = tasks_col.find_one({"_id": task_id})
-    
-    if not task:
-        await callback_query.answer("Task not found!", show_alert=True)
-        return
-    
-    await callback_query.message.edit_text(
-        format_task(task),
-        reply_markup=build_task_detail_keyboard(task_id)
-    )
-    await callback_query.answer()
-
-@app.on_callback_query(filters.regex("^complete_task_"))
-async def complete_task_callback(client: Client, callback_query: CallbackQuery):
-    task_id = callback_query.data.split("_")[2]
-    updated_task = update_task(task_id, {
-        "status": TaskStatus.COMPLETED.value,
-        "completed_at": get_current_datetime()
+@app.on_callback_query(filters.regex("^subject_"))
+async def subject_selected(client: Client, callback: CallbackQuery):
+    subject = callback.data.split("_")[1]
+    user_states[callback.from_user.id].update({
+        "subject": subject,
+        "step": "topic"
     })
-    
-    if updated_task:
-        await callback_query.message.edit_text(
-            format_task(updated_task),
-            reply_markup=build_task_detail_keyboard(task_id)
-        )
-        await callback_query.answer("Task completed! 🎉")
-    else:
-        await callback_query.answer("Failed to complete task", show_alert=True)
-
-@app.on_callback_query(filters.regex("^set_priority_"))
-async def set_priority_callback(client: Client, callback_query: CallbackQuery):
-    task_id = callback_query.data.split("_")[2]
-    await callback_query.message.edit_text(
-        "Select a priority level:",
-        reply_markup=build_priority_keyboard(task_id)
+    await callback.message.edit_text(
+        f"📖 **{subject} - Enter Topic/Chapter:**\n\n"
+        "(Example: 'Organic Chemistry - Hydrocarbons')"
     )
-    await callback_query.answer()
+    await callback.answer()
+
+@app.on_message(filters.text & ~filters.command)
+async def handle_text_input(client: Client, message: Message):
+    user_id = message.from_user.id
+    if user_id not in user_states:
+        return
+    
+    state = user_states[user_id]
+    if state["action"] == "add_task":
+        if state["step"] == "topic":
+            state.update({
+                "topic": message.text,
+                "step": "details"
+            })
+            await message.reply_text(
+                "📝 **Enter Details/Specifics:**\n\n"
+                "(Example: 'Practice named reactions from page 45-50')"
+            )
+        elif state["step"] == "details":
+            state.update({
+                "details": message.text,
+                "step": "priority"
+            })
+            await message.reply_text(
+                "⚡ **Set Priority Level:**",
+                reply_markup=priority_kb()
+            )
 
 @app.on_callback_query(filters.regex("^priority_"))
-async def apply_priority_callback(client: Client, callback_query: CallbackQuery):
-    _, task_id, priority = callback_query.data.split("_")
-    priority = int(priority)
+async def priority_selected(client: Client, callback: CallbackQuery):
+    priority = int(callback.data.split("_")[1])
+    user_id = callback.from_user.id
+    state = user_states[user_id]
     
-    priority_map = {
-        1: "🔥 HIGH PRIORITY",
-        2: "🔼 MEDIUM PRIORITY",
-        3: "🐢 LOW PRIORITY",
-        0: "No priority"
+    task = {
+        "user_id": user_id,
+        "subject": state["subject"],
+        "topic": state["topic"],
+        "details": state["details"],
+        "priority": priority,
+        "created_at": datetime.now(),
+        "completed_date": None,
+        "next_review": None,
+        "review_stage": 0
     }
     
-    if priority > 0:
-        update_task(task_id, {"priority": priority})
-        message = f"Priority set to {priority_map[priority]}"
-    else:
-        update_task(task_id, {"$unset": {"priority": ""}})
-        message = "Priority removed"
+    tasks_collection.insert_one(task)
     
-    await callback_query.answer(message)
-    await view_task_callback(client, callback_query)
-
-@app.on_callback_query(filters.regex("^view_categories$"))
-async def view_categories_callback(client: Client, callback_query: CallbackQuery):
-    user_id = callback_query.from_user.id
-    await callback_query.message.edit_text(
-        "📚 <b>Your Categories</b>\n\n"
-        "Select a category to view tasks or create a new one:",
-        reply_markup=build_categories_keyboard(user_id)
+    del user_states[user_id]
+    await callback.message.edit_text(
+        "🎉 **Task Added Successfully!**\n\n"
+        f"**{state['subject']} - {state['topic']}**\n"
+        f"Priority: {Config.PRIORITY_NAMES[priority]}\n\n"
+        f"Details: {state['details']}",
+        reply_markup=main_menu_kb()
     )
-    await callback_query.answer()
+    await callback.answer()
 
-@app.on_callback_query(filters.regex("^apply_category_"))
-async def apply_category_callback(client: Client, callback_query: CallbackQuery):
-    _, _, task_id, category_id = callback_query.data.split("_")
-    category = categories_col.find_one({"_id": category_id})
+@app.on_callback_query(filters.regex("^mark_completed$"))
+async def mark_completed_cb(client: Client, callback: CallbackQuery):
+    tasks = list(tasks_collection.find({
+        "user_id": callback.from_user.id,
+        "completed_date": None
+    }).sort("created_at", -1).limit(10))
     
-    if category:
-        update_task(task_id, {"category": category["name"]})
-        await callback_query.answer(f"Category set to {category['name']}")
-    else:
-        await callback_query.answer("Category not found", show_alert=True)
+    if not tasks:
+        await callback.answer("You have no pending tasks!")
+        return
     
-    await view_task_callback(client, callback_query)
-
-@app.on_callback_query(filters.regex("^quick_add$"))
-async def quick_add_callback(client: Client, callback_query: CallbackQuery):
-    await callback_query.message.reply_text(
-        "Type your task quickly:\n\n"
-        "You can include:\n"
-        "- !!high for high priority\n"
-        "- !!low for low priority\n"
-        "- 'today' or 'tomorrow' for due dates",
-        reply_markup=ReplyKeyboardRemove()
+    buttons = []
+    for task in tasks:
+        btn_text = f"{task['subject'][:5]}... - {task['topic'][:15]}..."
+        buttons.append([InlineKeyboardButton(btn_text, callback_data=f"complete_{task['_id']}")])
+    
+    await callback.message.edit_text(
+        "✅ **Select Task to Mark as Completed:**",
+        reply_markup=InlineKeyboardMarkup(buttons)
     )
-    await callback_query.answer()
+    await callback.answer()
 
-# Message handler for quick add
-@app.on_message(filters.private & ~filters.command(["start", "menu", "add", "help"]))
-async def handle_quick_add(client: Client, message: Message):
-    if message.reply_to_message and "Type your task quickly" in message.reply_to_message.text:
-        user = message.from_user
-        await add_task_command(client, message)
+@app.on_callback_query(filters.regex("^complete_"))
+async def complete_task_cb(client: Client, callback: CallbackQuery):
+    task_id = callback.data.split("_")[1]
+    result = tasks_collection.update_one(
+        {"_id": task_id},
+        {"$set": {
+            "completed_date": datetime.now(),
+            "next_review": datetime.now() + timedelta(days=1),
+            "review_stage": 1
+        }}
+    )
+    
+    if result.modified_count > 0:
+        task = tasks_collection.find_one({"_id": task_id})
+        await callback.message.edit_text(
+            f"🎯 **Task Marked Completed!**\n\n{format_task(task)}",
+            reply_markup=main_menu_kb()
+        )
+    await callback.answer()
+
+@app.on_callback_query(filters.regex("^view_tasks$"))
+async def view_tasks_cb(client: Client, callback: CallbackQuery):
+    tasks = list(tasks_collection.find({
+        "user_id": callback.from_user.id
+    }).sort([("completed_date", -1), ("created_at", -1)]).limit(5))
+    
+    if not tasks:
+        await callback.answer("You have no tasks yet!")
+        return
+    
+    response = "📚 **Your Tasks:**\n\n"
+    for task in tasks:
+        response += format_task(task) + "\n"
+    
+    total_tasks = tasks_collection.count_documents({"user_id": callback.from_user.id})
+    if total_tasks > 5:
+        response += f"\n...and {total_tasks-5} more tasks"
+    
+    await callback.message.edit_text(
+        response,
+        reply_markup=main_menu_kb()
+    )
+    await callback.answer()
+
+# --- Review System --- #
+async def send_review_reminders():
+    while True:
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        tasks = list(tasks_collection.find({
+            "next_review": {"$lte": today}
+        }))
+        
+        for task in tasks:
+            try:
+                await app.send_message(
+                    task["user_id"],
+                    f"⏰ **Review Reminder!**\n\n{format_task(task)}\n\n"
+                    "Have you reviewed this material?",
+                    reply_markup=review_kb(str(task["_id"]), task.get("review_stage", 1))
+                )
+            except Exception as e:
+                print(f"Failed to send reminder: {e}")
+        
+        await asyncio.sleep(60 * 60 * 24)  # Check daily
+
+@app.on_callback_query(filters.regex("^reviewed_"))
+async def reviewed_cb(client: Client, callback: CallbackQuery):
+    _, task_id, stage = callback.data.split("_")
+    stage = int(stage)
+    
+    next_review = schedule_next_review(stage)
+    update_data = {
+        "review_stage": stage + 1,
+        "last_reviewed": datetime.now()
+    }
+    
+    if next_review:
+        update_data["next_review"] = next_review
+    else:
+        update_data["next_review"] = None
+    
+    result = tasks_collection.update_one(
+        {"_id": task_id},
+        {"$set": update_data}
+    )
+    
+    if result.modified_count > 0:
+        if next_review:
+            await callback.message.edit_text(
+                f"📚 **Review Logged!**\n\n"
+                f"Next review on {next_review.strftime('%d %b %Y')}",
+                reply_markup=main_menu_kb()
+            )
+        else:
+            await callback.message.edit_text(
+                "🎉 **Review Cycle Complete!**\n\n"
+                "You've finished all scheduled reviews for this topic!",
+                reply_markup=main_menu_kb()
+            )
+    await callback.answer()
+
+# --- Main Loop --- #
+async def main():
+    await app.start()
+    print("Bot started!")
+    asyncio.create_task(send_review_reminders())
+    await asyncio.Event().wait()
 
 if __name__ == "__main__":
-    print("Ultimate To-Do Bot is running...")
-    app.run()
+    asyncio.run(main())
