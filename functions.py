@@ -11,10 +11,8 @@ from pyrogram.types import (
     CallbackQuery
 )
 from pymongo import MongoClient
-from dotenv import load_dotenv
 from config import *
-# Load environment variables
-load_dotenv()
+
 
 # --- Configuration --- #
 class Config:
