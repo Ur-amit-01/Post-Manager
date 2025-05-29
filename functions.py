@@ -33,8 +33,7 @@ tasks_collection.create_index([("next_review", 1)])
 tasks_collection.create_index([("user_id", 1), ("completed_date", 1)])
 
 # --- Bot Setup --- #
-app = Client("neet_study_bot", bot_token=BOT_TOKEN)
-
+app = Client("neet_study_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 # --- State Management --- #
 user_states: Dict[int, Dict] = {}
 
