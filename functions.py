@@ -203,7 +203,7 @@ async def start(client, message):
         "▫️ /stats - Your productivity stats\n"
         "▫️ /report - Detailed progress report\n\n"
         "💡 *Tip:* Mark tasks complete to activate our smart revision system!",
-        parse_mode="Markdown"
+        parse_mode="markdown"
     )
 
 @app.on_message(filters.command("addtask"))
@@ -211,12 +211,12 @@ async def add_task(client, message):
     user_id = message.from_user.id
     
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ Done Adding Tasks", callback_data="done_adding_tasks")]
+        [InlineKeyboardButton("**✅ Tasks added**", callback_data="done_adding_tasks")]
     ])
     
     await message.reply_text(
-        "📩 Please send me your tasks one by one.\n"
-        "Click the button below when you're done:",
+        "**📩 Please send me your tasks one by one.**\n"
+        "**Click the button below when you're done:**",
         reply_markup=keyboard
     )
     
@@ -435,7 +435,7 @@ async def show_stats(client, message):
         f"💡 *Tip:* Complete at least 1 task daily to maintain your streak!"
     )
     
-    await message.reply_text(stats_text, parse_mode="Markdown")
+    await message.reply_text(stats_text, parse_mode="markdown")
 
 @app.on_message(filters.command("report"))
 async def generate_report(client, message):
@@ -445,7 +445,7 @@ async def generate_report(client, message):
     await message.reply_photo(
         photo=chart,
         caption="📈 *Your 30-Day Progress Report*\n\nCheck your detailed statistics below:",
-        parse_mode="Markdown"
+        parse_mode="markdown"
     )
     
     await show_stats(client, message)
