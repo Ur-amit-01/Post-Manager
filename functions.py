@@ -213,6 +213,7 @@ async def add_task(client, message):
     
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("Done ✅", callback_data="done_adding_tasks")]
+    ])
 
     await message.reply_text(
         "**📩 Please send me your tasks one by one.**\n"
