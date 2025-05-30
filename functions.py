@@ -202,8 +202,7 @@ async def start(client, message):
         "▫️ /mytasks - View/Manage tasks\n"
         "▫️ /stats - Your productivity stats\n"
         "▫️ /report - Detailed progress report\n\n"
-        "💡 *Tip:* Mark tasks complete to activate our smart revision system!",
-        parse_mode="markdown"
+        "💡 *Tip:* Mark tasks complete to activate the smart revision system!"
     )
 
 @app.on_message(filters.command("addtask"))
@@ -243,7 +242,7 @@ async def process_task_description(client, message):
     result = tasks_col.insert_one(task_data)
     users_col.update_one({"user_id": user_id}, {"$inc": {"total_tasks": 1}})
     
-    await message.reply_text(f"📌 Task added successfully!\n\n`{task_text}`", parse_mode="Markdown")
+    await message.reply_text(f"📌 Task added successfully!\n\n`{task_text}`")
 
 @app.on_callback_query(filters.regex("^done_adding_tasks$"))
 async def done_adding_tasks(client, callback_query):
@@ -435,7 +434,7 @@ async def show_stats(client, message):
         f"💡 *Tip:* Complete at least 1 task daily to maintain your streak!"
     )
     
-    await message.reply_text(stats_text, parse_mode="markdown")
+    await message.reply_text(stats_text)
 
 @app.on_message(filters.command("report"))
 async def generate_report(client, message):
