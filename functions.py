@@ -159,9 +159,9 @@ async def update_task_message(message, user_id):
     
     progress_text = (
         f"**📋 Your Tasks**\n"
-        "**> • Progress :- {completed}/{len(tasks)} ~ ({completion_rate:.1f}%)\n\n**"
-        "**Click on Task to mark it. ✅\n**"
-        "**Click ❌ to delete task.**"
+        f"**> • Progress :- {completed}/{len(tasks)} ~ ({completion_rate:.1f}%)\n\n**"
+        f"**Click on Task to mark it. ✅**\n"
+        f"**Click ❌ to delete task.**"
     )
     
     await message.edit_text(
@@ -348,9 +348,9 @@ async def show_tasks(client, message):
     
     progress_text = (
         f"**📋 Your Tasks**\n"
-        "**> • Progress :- {completed}/{len(tasks)} ~ ({completion_rate:.1f}%)\n\n**"
-        "**Click on Task to mark it. ✅\n**"
-        "**Click ❌ to delete task.**"
+        f"**> • Progress :- {completed}/{len(tasks)} ~ ({completion_rate:.1f}%)\n\n**"
+        f"**Click on Task to mark it. ✅**\n"
+        f"**Click ❌ to delete task.**"
     )
     
     await message.reply_text(
