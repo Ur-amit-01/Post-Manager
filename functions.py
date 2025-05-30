@@ -8,6 +8,7 @@ from pymongo import MongoClient
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from config import *
+from pyrogram.filters import command
 
 # Initialize Pyrogram Client
 app = Client(
