@@ -136,7 +136,7 @@ async def update_task_message(message, user_id):
     tasks = list(tasks_col.find({"user_id": user_id}).sort("created_at", -1))
     
     if not tasks:
-        await message.edit_text("🎉 You've completed all your tasks! Use /addtask to add more.")
+        await message.edit_text("**Congratulations 🎉. You've completed all your tasks! Use /addtask to add more.**")
         return
     
     completed = sum(1 for t in tasks if t["is_completed"])
@@ -158,8 +158,10 @@ async def update_task_message(message, user_id):
         ])
     
     progress_text = (
-        f"📋 Your Tasks ({completed}/{len(tasks)} completed - {completion_rate:.1f}%)\n\n"
-        "Click to toggle status | ❌ to delete"
+        f"**📋 Your Tasks**\n"
+        "**> • Progress :- {completed}/{len(tasks)} ~ ({completion_rate:.1f}%)\n\n**"
+        "**Click on Task to mark it. ✅\n**"
+        "**Click ❌ to delete task.**"
     )
     
     await message.edit_text(
@@ -210,9 +212,8 @@ async def add_task(client, message):
     user_id = message.from_user.id
     
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("**✅ Tasks added**", callback_data="done_adding_tasks")]
-    ])
-    
+        [InlineKeyboardButton("Done ✅", callback_data="done_adding_tasks")]
+
     await message.reply_text(
         "**📩 Please send me your tasks one by one.**\n"
         "**Click the button below when you're done:**",
@@ -242,7 +243,7 @@ async def process_task_description(client, message):
     result = tasks_col.insert_one(task_data)
     users_col.update_one({"user_id": user_id}, {"$inc": {"total_tasks": 1}})
     
-    await message.reply_text(f"📌 Task added successfully!\n\n`{task_text}`")
+    await message.reply_text(f"**📌 Task added successfully!\nSend more tasks or Click Done.**")
 
 @app.on_callback_query(filters.regex("^done_adding_tasks$"))
 async def done_adding_tasks(client, callback_query):
@@ -250,7 +251,7 @@ async def done_adding_tasks(client, callback_query):
     if user_id in user_temp_data:
         user_temp_data.pop(user_id)
     
-    await callback_query.message.edit_text("✅ Task addition completed!")
+    await callback_query.message.edit_text("**✅ Task addition completed!**")
     await callback_query.answer()
 
 @app.on_callback_query(filters.regex("^task_"))
@@ -345,8 +346,10 @@ async def show_tasks(client, message):
         ])
     
     progress_text = (
-        f"📋 Your Tasks ({completed}/{len(tasks)} completed - {completion_rate:.1f}%)\n\n"
-        "Click to toggle status | ❌ to delete"
+        f"**📋 Your Tasks**\n"
+        "**> • Progress :- {completed}/{len(tasks)} ~ ({completion_rate:.1f}%)\n\n**"
+        "**Click on Task to mark it. ✅\n**"
+        "**Click ❌ to delete task.**"
     )
     
     await message.reply_text(
@@ -368,7 +371,7 @@ async def mark_as_revised(client, callback_query):
     
     users_col.update_one({"user_id": user_id}, {"$inc": {"pending_revisions": -1}})
     
-    await callback_query.answer("🎯 Great job! Keep revising regularly.")
+    await callback_query.answer("**🎯 Great job! Keep revising regularly.**")
     await callback_query.message.delete()
 
 @app.on_callback_query(filters.regex("^remind_later_"))
@@ -387,7 +390,7 @@ async def remind_later(client, callback_query):
         args=[app, task_id, user_id, revision_day]
     )
     
-    await callback_query.answer("⏰ Okay, I'll remind you again in 3 hours!")
+    await callback_query.answer("**⏰ Okay, I'll remind you again in 3 hours!**")
     await callback_query.message.delete()
 
 @app.on_message(filters.command("stats"))
@@ -443,8 +446,7 @@ async def generate_report(client, message):
     chart = generate_progress_chart(user_id)
     await message.reply_photo(
         photo=chart,
-        caption="📈 *Your 30-Day Progress Report*\n\nCheck your detailed statistics below:",
-        parse_mode="markdown"
+        caption="📈 *Your 30-Day Progress Report*\n\nCheck your detailed statistics below:"
     )
     
     await show_stats(client, message)
