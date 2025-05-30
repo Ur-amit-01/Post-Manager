@@ -26,6 +26,7 @@ users_col = db["users"]
 tasks_col = db["tasks"]
 revisions_col = db["revisions"]
 stats_col = db["statistics"]
+admin_col = db["admin_settings"]
 
 # Scheduler for reminders
 scheduler = BackgroundScheduler()
@@ -33,6 +34,9 @@ scheduler.start()
 
 # Temporary storage for task creation
 user_temp_data = {}
+
+# Admin IDs from config
+ADMINS = ADMIN_IDS
 
 # Helper Functions
 def schedule_revisions(task_id, user_id):
@@ -169,6 +173,10 @@ async def update_task_message(message, user_id):
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
+def is_admin(user_id):
+    """Check if user is admin"""
+    return user_id in ADMINS
+
 # Command Handlers
 @app.on_message(filters.command(["start", "help"]))
 async def start(client, message):
@@ -191,21 +199,254 @@ async def start(client, message):
         upsert=True
     )
     
-    await message.reply_text(
-        "✨ *TaskMaster Pro* - Your Ultimate Productivity Companion ✨\n\n"
-        "🚀 *Features:*\n"
-        "• 📝 Add unlimited tasks\n"
-        "• ✅ Track completion status\n"
-        "• ⏰ Smart revision reminders\n"
-        "• 📊 Detailed progress analytics\n"
-        "• 🗑️ Easy task management\n\n"
+    # Attractive welcome message with buttons
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("➕ Add Tasks", callback_data="add_task_btn"),
+            InlineKeyboardButton("📋 My Tasks", callback_data="my_tasks_btn")
+        ],
+        [
+            InlineKeyboardButton("📊 Statistics", callback_data="stats_btn"),
+            InlineKeyboardButton("📈 Progress Report", callback_data="report_btn")
+        ],
+        [
+            InlineKeyboardButton("🎯 Premium Features", callback_data="premium_btn"),
+            InlineKeyboardButton("🆘 Help", callback_data="help_btn")
+        ]
+    ])
+    
+    if is_admin(user_id):
+        keyboard.inline_keyboard.append([InlineKeyboardButton("👑 Admin Panel", callback_data="admin_panel")])
+    
+    await message.reply_photo(
+        photo="https://telegra.ph/file/5e53a3e5a5a3e9a5e5a3e.jpg",  # Replace with your image URL
+        caption=(
+            "🌟 *Welcome to TaskMaster Pro - Your Ultimate Productivity Companion!* 🌟\n\n"
+            "🚀 *Supercharge your productivity with:*\n"
+            "• 📝 Smart task management\n"
+            "• ⏰ Intelligent revision reminders\n"
+            "• 📊 Detailed analytics & progress tracking\n"
+            "• 🎯 Goal achievement system\n\n"
+            "✨ *Get started by adding your first task!*"
+        ),
+        reply_markup=keyboard
+    )
+
+@app.on_callback_query(filters.regex("^add_task_btn$"))
+async def add_task_btn(client, callback_query):
+    await add_task(client, callback_query.message)
+    await callback_query.answer()
+
+@app.on_callback_query(filters.regex("^my_tasks_btn$"))
+async def my_tasks_btn(client, callback_query):
+    await show_tasks(client, callback_query.message)
+    await callback_query.answer()
+
+@app.on_callback_query(filters.regex("^stats_btn$"))
+async def stats_btn(client, callback_query):
+    await show_stats(client, callback_query.message)
+    await callback_query.answer()
+
+@app.on_callback_query(filters.regex("^report_btn$"))
+async def report_btn(client, callback_query):
+    await generate_report(client, callback_query.message)
+    await callback_query.answer()
+
+@app.on_callback_query(filters.regex("^premium_btn$"))
+async def premium_btn(client, callback_query):
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("💎 Get Premium", callback_data="get_premium")],
+        [InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]
+    ])
+    
+    await callback_query.message.edit_text(
+        "🚀 *TaskMaster Pro Premium Features*\n\n"
+        "• 📅 Unlimited task history\n"
+        "• 🔔 Priority reminders\n"
+        "• 📈 Advanced analytics\n"
+        "• 🎯 Custom revision schedules\n"
+        "• 🏆 Achievement badges\n\n"
+        "💎 Only $4.99/month!",
+        reply_markup=keyboard
+    )
+    await callback_query.answer()
+
+@app.on_callback_query(filters.regex("^help_btn$"))
+async def help_btn(client, callback_query):
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]
+    ])
+    
+    await callback_query.message.edit_text(
+        "🆘 *TaskMaster Pro Help*\n\n"
         "🔹 *Available Commands:*\n"
         "▫️ /addtask - Add new tasks\n"
         "▫️ /mytasks - View/Manage tasks\n"
         "▫️ /stats - Your productivity stats\n"
         "▫️ /report - Detailed progress report\n\n"
-        "💡 *Tip:* Mark tasks complete to activate the smart revision system!"
+        "💡 *Tips:*\n"
+        "- Mark tasks complete to activate smart revisions\n"
+        "- Complete tasks daily to maintain your streak\n"
+        "- Use revision reminders to reinforce learning\n\n"
+        "Need more help? Contact @TaskMasterSupport",
+        reply_markup=keyboard
     )
+    await callback_query.answer()
+
+@app.on_callback_query(filters.regex("^back_to_main$"))
+async def back_to_main(client, callback_query):
+    await start(client, callback_query.message)
+    await callback_query.answer()
+
+@app.on_callback_query(filters.regex("^admin_panel$"))
+async def admin_panel(client, callback_query):
+    if not is_admin(callback_query.from_user.id):
+        await callback_query.answer("⚠️ Access denied!", show_alert=True)
+        return
+    
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("📊 Bot Statistics", callback_data="admin_stats"),
+            InlineKeyboardButton("👥 User Management", callback_data="admin_users")
+        ],
+        [
+            InlineKeyboardButton("📢 Broadcast", callback_data="admin_broadcast"),
+            InlineKeyboardButton("⚙️ Settings", callback_data="admin_settings")
+        ],
+        [
+            InlineKeyboardButton("🔙 Back", callback_data="back_to_main")
+        ]
+    ])
+    
+    await callback_query.message.edit_text(
+        "👑 *Admin Panel*\n\n"
+        "Manage the bot and user data with the options below:",
+        reply_markup=keyboard
+    )
+    await callback_query.answer()
+
+@app.on_callback_query(filters.regex("^admin_stats$"))
+async def admin_stats(client, callback_query):
+    if not is_admin(callback_query.from_user.id):
+        await callback_query.answer("⚠️ Access denied!", show_alert=True)
+        return
+    
+    total_users = users_col.count_documents({})
+    active_users = users_col.count_documents({"last_active": {"$gte": datetime.now() - timedelta(days=7)}})
+    total_tasks = tasks_col.count_documents({})
+    completed_tasks = tasks_col.count_documents({"is_completed": True})
+    
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔄 Refresh", callback_data="admin_stats")],
+        [InlineKeyboardButton("🔙 Back", callback_data="admin_panel")]
+    ])
+    
+    await callback_query.message.edit_text(
+        "📊 *Bot Statistics*\n\n"
+        f"👥 Total Users: {total_users}\n"
+        f"🟢 Active Users (7d): {active_users}\n"
+        f"📝 Total Tasks: {total_tasks}\n"
+        f"✅ Completed Tasks: {completed_tasks}\n\n"
+        f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        reply_markup=keyboard
+    )
+    await callback_query.answer()
+
+@app.on_callback_query(filters.regex("^admin_users$"))
+async def admin_users(client, callback_query):
+    if not is_admin(callback_query.from_user.id):
+        await callback_query.answer("⚠️ Access denied!", show_alert=True)
+        return
+    
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📜 List All Users", callback_data="admin_list_users")],
+        [InlineKeyboardButton("🔍 Search User", callback_data="admin_search_user")],
+        [InlineKeyboardButton("🔙 Back", callback_data="admin_panel")]
+    ])
+    
+    await callback_query.message.edit_text(
+        "👥 *User Management*\n\n"
+        "Select an option to manage users:",
+        reply_markup=keyboard
+    )
+    await callback_query.answer()
+
+@app.on_callback_query(filters.regex("^admin_list_users$"))
+async def admin_list_users(client, callback_query):
+    if not is_admin(callback_query.from_user.id):
+        await callback_query.answer("⚠️ Access denied!", show_alert=True)
+        return
+    
+    users = list(users_col.find().sort("join_date", -1).limit(10))
+    
+    if not users:
+        text = "No users found."
+    else:
+        text = "👥 *Recent Users*\n\n"
+        for user in users:
+            text += f"👤 {user.get('first_name', 'Unknown')} (@{user.get('username', 'N/A')})\n"
+            text += f"🆔 ID: {user['user_id']}\n"
+            text += f"📅 Joined: {user['join_date'].strftime('%Y-%m-%d')}\n"
+            text += f"📝 Tasks: {user.get('total_tasks', 0)} (✅ {user.get('completed_tasks', 0)})\n\n"
+    
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔙 Back", callback_data="admin_users")]
+    ])
+    
+    await callback_query.message.edit_text(text, reply_markup=keyboard)
+    await callback_query.answer()
+
+@app.on_callback_query(filters.regex("^admin_broadcast$"))
+async def admin_broadcast(client, callback_query):
+    if not is_admin(callback_query.from_user.id):
+        await callback_query.answer("⚠️ Access denied!", show_alert=True)
+        return
+    
+    user_temp_data[callback_query.from_user.id] = {"awaiting_broadcast": True}
+    
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("❌ Cancel", callback_data="admin_panel")]
+    ])
+    
+    await callback_query.message.edit_text(
+        "📢 *Send Broadcast Message*\n\n"
+        "Please send the message you want to broadcast to all users.\n"
+        "You can include text, photos, or documents.",
+        reply_markup=keyboard
+    )
+    await callback_query.answer()
+
+@app.on_message(filters.private & ~command(["start", "help", "addtask", "mytasks", "stats", "report"]))
+async def process_admin_broadcast(client, message):
+    user_id = message.from_user.id
+    
+    if not user_temp_data.get(user_id, {}).get("awaiting_broadcast"):
+        return await process_task_description(client, message)
+    
+    user_temp_data.pop(user_id, None)
+    
+    users = users_col.find({})
+    total = 0
+    success = 0
+    
+    progress_msg = await message.reply_text("📢 Starting broadcast... Sent to 0 users")
+    
+    for user in users:
+        try:
+            await message.copy(user["user_id"])
+            success += 1
+        except Exception as e:
+            print(f"Failed to send to {user['user_id']}: {e}")
+        
+        total += 1
+        
+        if total % 10 == 0:
+            await progress_msg.edit_text(f"📢 Broadcast in progress... Sent to {total} users ({success} successful)")
+    
+    await progress_msg.edit_text(f"✅ Broadcast completed!\n\nTotal users: {total}\nSuccessfully sent: {success}\nFailed: {total - success}")
+    await message.reply_text("🔙 Returning to admin panel...", reply_markup=InlineKeyboardMarkup([
+        [InlineKeyboardButton("👑 Admin Panel", callback_data="admin_panel")]
+    ))
 
 @app.on_message(filters.command("addtask"))
 async def add_task(client, message):
@@ -222,29 +463,6 @@ async def add_task(client, message):
     )
     
     user_temp_data[user_id] = {"adding_task": True}
-
-@app.on_message(filters.private & ~command(["start", "help", "addtask", "mytasks", "stats", "report"]))
-async def process_task_description(client, message):
-    user_id = message.from_user.id
-    
-    if not user_temp_data.get(user_id, {}).get("adding_task"):
-        return
-    
-    task_text = message.text
-    
-    task_data = {
-        "user_id": user_id,
-        "task_text": task_text,
-        "created_at": datetime.now(),
-        "is_completed": False,
-        "completion_date": None,
-        "priority": 1
-    }
-    
-    result = tasks_col.insert_one(task_data)
-    users_col.update_one({"user_id": user_id}, {"$inc": {"total_tasks": 1}})
-    
-    await message.reply_text(f"**📌 Task added successfully!\nSend more tasks or Click Done.**")
 
 @app.on_callback_query(filters.regex("^done_adding_tasks$"))
 async def done_adding_tasks(client, callback_query):
