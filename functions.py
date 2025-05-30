@@ -187,6 +187,7 @@ async def update_task_message(client, user_id, message_id=None):
                 message_id,
                 progress_text,
                 reply_markup=InlineKeyboardMarkup(keyboard)
+            )
         except:
             pass
     else:
