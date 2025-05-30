@@ -33,6 +33,7 @@ scheduler.start()
 
 # Temporary storage for task creation
 user_temp_data = {}
+user_last_message = {}  # To track last message ID for each user
 
 # Helper Functions
 def schedule_revisions(task_id, user_id):
@@ -68,12 +69,12 @@ def schedule_revisions(task_id, user_id):
 
 async def send_revision_reminder(client, task_id, user_id, revision_day):
     """Send revision reminder to user"""
-    task = tasks_col.find_one({"_id": task_id})
+    task = tasks_col.find_one({"_id": ObjectId(task_id)})
     if not task:
         return
     
     revisions_col.update_one(
-        {"task_id": task_id, "user_id": user_id, "revision_day": revision_day},
+        {"task_id": ObjectId(task_id), "user_id": user_id, "revision_day": revision_day},
         {"$set": {"reminder_sent": True, "reminder_sent_at": datetime.now()}}
     )
     
@@ -131,6 +132,70 @@ def generate_progress_chart(user_id):
     
     return buf
 
+async def update_task_message(client, user_id, message_id=None):
+    """Update the task list message with current status"""
+    tasks = list(tasks_col.find({"user_id": user_id}).sort("created_at", -1))
+    
+    if not tasks:
+        if message_id:
+            try:
+                await client.edit_message_text(
+                    user_id,
+                    message_id,
+                    "You don't have any tasks yet. Use /addtask to add one."
+                )
+            except:
+                pass
+        return
+    
+    completed = sum(1 for t in tasks if t["is_completed"])
+    completion_rate = (completed / len(tasks)) * 100 if tasks else 0
+    
+    keyboard = []
+    for task in tasks:
+        status = "✅" if task["is_completed"] else "☐"
+        btn_text = f"{status} {task['task_text'][:30]}"  # Limit text length
+        keyboard.append([
+            InlineKeyboardButton(
+                btn_text, 
+                callback_data=f"task_{task['_id']}"
+            ),
+            InlineKeyboardButton(
+                "✅", 
+                callback_data=f"complete_{task['_id']}"
+            ),
+            InlineKeyboardButton(
+                "❌", 
+                callback_data=f"delete_{task['_id']}"
+            )
+        ])
+    
+    # Add Done button at the bottom
+    keyboard.append([
+        InlineKeyboardButton("✅ Done", callback_data="done_viewing_tasks")
+    ])
+    
+    progress_text = (
+        f"📊 Your Progress: {completed}/{len(tasks)} tasks completed ({completion_rate:.1f}%)\n\n"
+        "Click on a task to toggle its status or use buttons:"
+    )
+    
+    if message_id:
+        try:
+            await client.edit_message_text(
+                user_id,
+                message_id,
+                progress_text,
+                reply_markup=InlineKeyboardMarkup(keyboard)
+        except:
+            pass
+    else:
+        msg = await client.send_message(
+            user_id,
+            progress_text,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        user_last_message[user_id] = msg.id
+
 # Command Handlers
 @app.on_message(filters.command("start"))
 async def start(client, message):
@@ -174,10 +239,18 @@ async def add_task(client, message):
         [InlineKeyboardButton("✅ Done Adding Tasks", callback_data="done_adding_tasks")]
     ])
     
-    await message.reply_text(
+    # Delete previous message if exists
+    if user_id in user_last_message:
+        try:
+            await client.delete_messages(user_id, user_last_message[user_id])
+        except:
+            pass
+    
+    msg = await message.reply_text(
         "Please send me your tasks one by one. Click the button below when you're done:",
         reply_markup=keyboard
     )
+    user_last_message[user_id] = msg.id
     
     user_temp_data[user_id] = {"adding_task": True}
 
@@ -199,10 +272,40 @@ async def process_task_description(client, message):
         "priority": 1
     }
     
-    tasks_col.insert_one(task_data)
+    result = tasks_col.insert_one(task_data)
     users_col.update_one({"user_id": user_id}, {"$inc": {"total_tasks": 1}})
     
-    await message.reply_text(f"✅ Task added: {task_text}")
+    # Delete previous message if exists
+    if user_id in user_last_message:
+        try:
+            await client.delete_messages(user_id, user_last_message[user_id])
+        except:
+            pass
+    
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ Done", callback_data=f"confirm_task_{result.inserted_id}")]
+    ])
+    
+    msg = await message.reply_text(
+        f"✅ Task added: {task_text}\n\n"
+        "Click Done to confirm or send another task.",
+        reply_markup=keyboard
+    )
+    user_last_message[user_id] = msg.id
+
+@app.on_callback_query(filters.regex("^confirm_task_"))
+async def confirm_task(client, callback_query):
+    user_id = callback_query.from_user.id
+    task_id = callback_query.data.split("_")[-1]
+    
+    # Delete confirmation message
+    try:
+        await callback_query.message.delete()
+    except:
+        pass
+    
+    await callback_query.answer("Task confirmed!")
+    await show_tasks(client, callback_query.message)
 
 @app.on_callback_query(filters.regex("^done_adding_tasks$"))
 async def done_adding_tasks(client, callback_query):
@@ -210,8 +313,13 @@ async def done_adding_tasks(client, callback_query):
     if user_id in user_temp_data:
         user_temp_data.pop(user_id)
     
-    await callback_query.message.edit_text("Task addition completed!")
-    await callback_query.answer()
+    try:
+        await callback_query.message.delete()
+    except:
+        pass
+    
+    await callback_query.answer("Task addition completed!")
+    await show_tasks(client, callback_query.message)
 
 @app.on_callback_query(filters.regex("^task_"))
 async def toggle_task_status(client, callback_query):
@@ -219,7 +327,6 @@ async def toggle_task_status(client, callback_query):
         task_id = callback_query.data.split("_")[1]
         user_id = callback_query.from_user.id
         
-        # Convert string task_id to ObjectId
         task = tasks_col.find_one({"_id": ObjectId(task_id), "user_id": user_id})
         
         if not task:
@@ -243,43 +350,106 @@ async def toggle_task_status(client, callback_query):
             record_task_completion(user_id)
         
         await callback_query.answer("Task status updated!")
-        await show_tasks(client, callback_query.message)
+        await update_task_message(client, user_id, callback_query.message.id)
     except Exception as e:
         print(f"Error in toggle_task_status: {e}")
         await callback_query.answer("Error updating task status", show_alert=True)
 
+@app.on_callback_query(filters.regex("^complete_"))
+async def complete_task(client, callback_query):
+    try:
+        task_id = callback_query.data.split("_")[1]
+        user_id = callback_query.from_user.id
+        
+        task = tasks_col.find_one({"_id": ObjectId(task_id), "user_id": user_id})
+        
+        if not task:
+            await callback_query.answer("Task not found!", show_alert=True)
+            return
+        
+        if task["is_completed"]:
+            await callback_query.answer("Task already completed!")
+            return
+        
+        update_data = {
+            "is_completed": True,
+            "completion_date": datetime.now()
+        }
+        
+        tasks_col.update_one({"_id": ObjectId(task_id)}, {"$set": update_data})
+        users_col.update_one({"user_id": user_id}, {"$inc": {"completed_tasks": 1}})
+        
+        schedule_revisions(ObjectId(task_id), user_id)
+        record_task_completion(user_id)
+        
+        await callback_query.answer("Task marked as completed!")
+        await update_task_message(client, user_id, callback_query.message.id)
+    except Exception as e:
+        print(f"Error in complete_task: {e}")
+        await callback_query.answer("Error completing task", show_alert=True)
+
+@app.on_callback_query(filters.regex("^delete_"))
+async def delete_task(client, callback_query):
+    try:
+        task_id = callback_query.data.split("_")[1]
+        user_id = callback_query.from_user.id
+        
+        task = tasks_col.find_one({"_id": ObjectId(task_id), "user_id": user_id})
+        
+        if not task:
+            await callback_query.answer("Task not found!", show_alert=True)
+            return
+        
+        # Delete the task and any associated revisions
+        tasks_col.delete_one({"_id": ObjectId(task_id)})
+        revisions_col.delete_many({"task_id": ObjectId(task_id)})
+        
+        # Update user stats
+        update_data = {"$inc": {"total_tasks": -1}}
+        if task["is_completed"]:
+            update_data["$inc"]["completed_tasks"] = -1
+            # Decrement pending revisions count
+            pending_revs = revisions_col.count_documents({
+                "task_id": ObjectId(task_id),
+                "is_done": False
+            })
+            if pending_revs > 0:
+                users_col.update_one(
+                    {"user_id": user_id},
+                    {"$inc": {"pending_revisions": -pending_revs}}
+                )
+        
+        users_col.update_one({"user_id": user_id}, update_data)
+        
+        await callback_query.answer("Task deleted!")
+        await update_task_message(client, user_id, callback_query.message.id)
+    except Exception as e:
+        print(f"Error in delete_task: {e}")
+        await callback_query.answer("Error deleting task", show_alert=True)
+
+@app.on_callback_query(filters.regex("^done_viewing_tasks$"))
+async def done_viewing_tasks(client, callback_query):
+    user_id = callback_query.from_user.id
+    
+    try:
+        await callback_query.message.delete()
+    except:
+        pass
+    
+    await callback_query.answer("Task viewing completed!")
+
 @app.on_message(filters.command("mytasks"))
 async def show_tasks(client, message):
     user_id = message.from_user.id
-    tasks = list(tasks_col.find({"user_id": user_id}).sort("created_at", -1))
     
-    if not tasks:
-        await message.reply_text("You don't have any tasks yet. Use /addtask to add one.")
-        return
+    # Delete previous message if exists
+    if user_id in user_last_message:
+        try:
+            await client.delete_messages(user_id, user_last_message[user_id])
+        except:
+            pass
     
-    completed = sum(1 for t in tasks if t["is_completed"])
-    completion_rate = (completed / len(tasks)) * 100 if tasks else 0
-    
-    keyboard = []
-    for task in tasks:
-        status = "✅" if task["is_completed"] else "☐"
-        btn_text = f"{status} {task['task_text'][:50]}"  # Limit text length to prevent button overflow
-        keyboard.append([
-            InlineKeyboardButton(
-                btn_text, 
-                callback_data=f"task_{task['_id']}"  # Store the ObjectId directly
-            )
-        ])
-    
-    progress_text = (
-        f"📊 Your Progress: {completed}/{len(tasks)} tasks completed ({completion_rate:.1f}%)\n\n"
-        "Click on a task to toggle its status:"
-    )
-    
-    await message.reply_text(
-        progress_text,
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    await update_task_message(client, user_id)
 
 @app.on_callback_query(filters.regex("^revised_"))
 async def mark_as_revised(client, callback_query):
@@ -289,7 +459,7 @@ async def mark_as_revised(client, callback_query):
     user_id = callback_query.from_user.id
     
     revisions_col.update_one(
-        {"task_id": task_id, "user_id": user_id, "revision_day": revision_day},
+        {"task_id": ObjectId(task_id), "user_id": user_id, "revision_day": revision_day},
         {"$set": {"is_done": True, "completed_at": datetime.now()}}
     )
     
@@ -301,8 +471,8 @@ async def mark_as_revised(client, callback_query):
 @app.on_callback_query(filters.regex("^remind_later_"))
 async def remind_later(client, callback_query):
     parts = callback_query.data.split("_")
-    task_id = parts[2]
-    revision_day = int(parts[3])
+    task_id = parts[1]
+    revision_day = int(parts[2])
     user_id = callback_query.from_user.id
     
     new_time = datetime.now() + timedelta(hours=3)  # Remind after 3 hours
