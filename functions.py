@@ -192,7 +192,7 @@ async def process_task_subject(client, callback_query):
     
     user_temp_data[user_id] = {"adding_task": True, "subject": subject}
 
-@app.on_message(filters.private & ~filters.command)
+@app.on_message(filters.private & ~filters.command())
 async def process_task_description(client, message):
     user_id = message.from_user.id
     
