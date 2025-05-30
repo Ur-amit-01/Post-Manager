@@ -195,7 +195,10 @@ async def update_task_message(client, user_id, message_id=None):
             user_id,
             progress_text,
             reply_markup=InlineKeyboardMarkup(keyboard)
+        )
         user_last_message[user_id] = msg.id
+
+        
 
 # Command Handlers
 @app.on_message(filters.command("start"))
