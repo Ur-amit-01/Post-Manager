@@ -9,6 +9,7 @@ from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from config import *
 from pyrogram.filters import command
+from bson.objectid import ObjectId
 
 # Initialize Pyrogram Client
 app = Client(
@@ -43,7 +44,7 @@ def schedule_revisions(task_id, user_id):
         revision_date = created_date + timedelta(days=day)
         
         revision_data = {
-            "task_id": task_id,
+            "task_id": task_id,  # This is now an ObjectId
             "user_id": user_id,
             "revision_date": revision_date,
             "revision_day": day,
@@ -57,7 +58,7 @@ def schedule_revisions(task_id, user_id):
             send_revision_reminder,
             'date',
             run_date=revision_date,
-            args=[app, task_id, user_id, day]
+            args=[app, str(task_id), user_id, day]  # Convert ObjectId to string for scheduling
         )
     
     users_col.update_one(
@@ -212,6 +213,41 @@ async def done_adding_tasks(client, callback_query):
     await callback_query.message.edit_text("Task addition completed!")
     await callback_query.answer()
 
+@app.on_callback_query(filters.regex("^task_"))
+async def toggle_task_status(client, callback_query):
+    try:
+        task_id = callback_query.data.split("_")[1]
+        user_id = callback_query.from_user.id
+        
+        # Convert string task_id to ObjectId
+        task = tasks_col.find_one({"_id": ObjectId(task_id), "user_id": user_id})
+        
+        if not task:
+            await callback_query.answer("Task not found!", show_alert=True)
+            return
+        
+        new_status = not task["is_completed"]
+        update_data = {
+            "is_completed": new_status,
+            "completion_date": datetime.now() if new_status else None
+        }
+        
+        tasks_col.update_one({"_id": ObjectId(task_id)}, {"$set": update_data})
+        users_col.update_one(
+            {"user_id": user_id}, 
+            {"$inc": {"completed_tasks": 1 if new_status else -1}}
+        )
+        
+        if new_status:
+            schedule_revisions(ObjectId(task_id), user_id)
+            record_task_completion(user_id)
+        
+        await callback_query.answer("Task status updated!")
+        await show_tasks(client, callback_query.message)
+    except Exception as e:
+        print(f"Error in toggle_task_status: {e}")
+        await callback_query.answer("Error updating task status", show_alert=True)
+
 @app.on_message(filters.command("mytasks"))
 async def show_tasks(client, message):
     user_id = message.from_user.id
@@ -227,8 +263,13 @@ async def show_tasks(client, message):
     keyboard = []
     for task in tasks:
         status = "✅" if task["is_completed"] else "☐"
-        btn_text = f"{status} {task['task_text']}"
-        keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"task_{task['_id']}")])
+        btn_text = f"{status} {task['task_text'][:50]}"  # Limit text length to prevent button overflow
+        keyboard.append([
+            InlineKeyboardButton(
+                btn_text, 
+                callback_data=f"task_{task['_id']}"  # Store the ObjectId directly
+            )
+        ])
     
     progress_text = (
         f"📊 Your Progress: {completed}/{len(tasks)} tasks completed ({completion_rate:.1f}%)\n\n"
@@ -239,38 +280,6 @@ async def show_tasks(client, message):
         progress_text,
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
-
-@app.on_callback_query(filters.regex("^task_"))
-async def toggle_task_status(client, callback_query):
-    task_id = callback_query.data.split("_")[1]
-    user_id = callback_query.from_user.id
-    
-    # Convert task_id to ObjectId if needed (assuming MongoDB)
-    from bson.objectid import ObjectId
-    try:
-        task = tasks_col.find_one({"_id": ObjectId(task_id), "user_id": user_id})
-    except:
-        task = tasks_col.find_one({"_id": task_id, "user_id": user_id})
-    
-    if not task:
-        await callback_query.answer("Task not found!", show_alert=True)
-        return
-    
-    new_status = not task["is_completed"]
-    update_data = {
-        "is_completed": new_status,
-        "completion_date": datetime.now() if new_status else None
-    }
-    
-    tasks_col.update_one({"_id": task["_id"]}, {"$set": update_data})
-    users_col.update_one({"user_id": user_id}, {"$inc": {"completed_tasks": 1 if new_status else -1}})
-    
-    if new_status:
-        schedule_revisions(task["_id"], user_id)
-        record_task_completion(user_id)
-    
-    await callback_query.answer("Task status updated!")
-    await show_tasks(client, callback_query.message)
 
 @app.on_callback_query(filters.regex("^revised_"))
 async def mark_as_revised(client, callback_query):
