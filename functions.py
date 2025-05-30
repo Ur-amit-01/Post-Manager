@@ -33,7 +33,6 @@ scheduler.start()
 
 # Temporary storage for task creation
 user_temp_data = {}
-user_last_message = {}  # To track last message ID for each user
 
 # Helper Functions
 def schedule_revisions(task_id, user_id):
@@ -88,7 +87,7 @@ async def send_revision_reminder(client, task_id, user_id, revision_day):
     await client.send_message(
         user_id,
         f"⏰ Revision Reminder (Day {revision_day})\n\n"
-        f"Task: {task['task_text']}\n\n"
+        f"📝 Task: {task['task_text']}\n\n"
         "Have you revised this today?",
         reply_markup=keyboard
     )
@@ -118,8 +117,8 @@ def generate_progress_chart(user_id):
         stats = stats_col.find_one({"user_id": user_id, "date": date})
         completed.append(stats["total"] if stats else 0)
     
-    ax.bar(dates, completed, color='skyblue')
-    ax.set_title("Tasks Completed in Last 30 Days")
+    ax.bar(dates, completed, color='#4CAF50')
+    ax.set_title("📈 Tasks Completed in Last 30 Days")
     ax.set_xlabel("Date")
     ax.set_ylabel("Tasks Completed")
     plt.xticks(rotation=45)
@@ -132,20 +131,12 @@ def generate_progress_chart(user_id):
     
     return buf
 
-async def update_task_message(client, user_id, message_id=None):
-    """Update the task list message with current status"""
+async def update_task_message(message, user_id):
+    """Update the task message with current status"""
     tasks = list(tasks_col.find({"user_id": user_id}).sort("created_at", -1))
     
     if not tasks:
-        if message_id:
-            try:
-                await client.edit_message_text(
-                    user_id,
-                    message_id,
-                    "You don't have any tasks yet. Use /addtask to add one."
-                )
-            except:
-                pass
+        await message.edit_text("🎉 You've completed all your tasks! Use /addtask to add more.")
         return
     
     completed = sum(1 for t in tasks if t["is_completed"])
@@ -153,7 +144,7 @@ async def update_task_message(client, user_id, message_id=None):
     
     keyboard = []
     for task in tasks:
-        status = "✅" if task["is_completed"] else "☐"
+        status = "✅" if task["is_completed"] else "◻️"
         btn_text = f"{status} {task['task_text'][:30]}"  # Limit text length
         keyboard.append([
             InlineKeyboardButton(
@@ -161,47 +152,23 @@ async def update_task_message(client, user_id, message_id=None):
                 callback_data=f"task_{task['_id']}"
             ),
             InlineKeyboardButton(
-                "✅", 
-                callback_data=f"complete_{task['_id']}"
-            ),
-            InlineKeyboardButton(
                 "❌", 
                 callback_data=f"delete_{task['_id']}"
             )
         ])
     
-    # Add Done button at the bottom
-    keyboard.append([
-        InlineKeyboardButton("✅ Done", callback_data="done_viewing_tasks")
-    ])
-    
     progress_text = (
-        f"📊 Your Progress: {completed}/{len(tasks)} tasks completed ({completion_rate:.1f}%)\n\n"
-        "Click on a task to toggle its status or use buttons:"
+        f"📋 Your Tasks ({completed}/{len(tasks)} completed - {completion_rate:.1f}%)\n\n"
+        "Click to toggle status | ❌ to delete"
     )
     
-    if message_id:
-        try:
-            await client.edit_message_text(
-                user_id,
-                message_id,
-                progress_text,
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
-        except:
-            pass
-    else:
-        msg = await client.send_message(
-            user_id,
-            progress_text,
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-        user_last_message[user_id] = msg.id
-
-        
+    await message.edit_text(
+        progress_text,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
 
 # Command Handlers
-@app.on_message(filters.command("start"))
+@app.on_message(filters.command(["start", "help"]))
 async def start(client, message):
     user_id = message.from_user.id
     user_data = {
@@ -223,16 +190,20 @@ async def start(client, message):
     )
     
     await message.reply_text(
-        "📚 Task Tracker Bot\n\n"
-        "Manage your tasks with:\n"
-        "- Task tracking ✓\n"
-        "- Spaced repetition ⏰\n"
-        "- Progress analytics 📈\n\n"
-        "Commands:\n"
-        "/addtask - Add new task\n"
-        "/mytasks - View your tasks\n"
-        "/stats - View your progress\n"
-        "/report - Get detailed performance report"
+        "✨ *TaskMaster Pro* - Your Ultimate Productivity Companion ✨\n\n"
+        "🚀 *Features:*\n"
+        "• 📝 Add unlimited tasks\n"
+        "• ✅ Track completion status\n"
+        "• ⏰ Smart revision reminders\n"
+        "• 📊 Detailed progress analytics\n"
+        "• 🗑️ Easy task management\n\n"
+        "🔹 *Available Commands:*\n"
+        "▫️ /addtask - Add new tasks\n"
+        "▫️ /mytasks - View/Manage tasks\n"
+        "▫️ /stats - Your productivity stats\n"
+        "▫️ /report - Detailed progress report\n\n"
+        "💡 *Tip:* Mark tasks complete to activate our smart revision system!",
+        parse_mode="Markdown"
     )
 
 @app.on_message(filters.command("addtask"))
@@ -243,22 +214,15 @@ async def add_task(client, message):
         [InlineKeyboardButton("✅ Done Adding Tasks", callback_data="done_adding_tasks")]
     ])
     
-    # Delete previous message if exists
-    if user_id in user_last_message:
-        try:
-            await client.delete_messages(user_id, user_last_message[user_id])
-        except:
-            pass
-    
-    msg = await message.reply_text(
-        "Please send me your tasks one by one. Click the button below when you're done:",
+    await message.reply_text(
+        "📩 Please send me your tasks one by one.\n"
+        "Click the button below when you're done:",
         reply_markup=keyboard
     )
-    user_last_message[user_id] = msg.id
     
     user_temp_data[user_id] = {"adding_task": True}
 
-@app.on_message(filters.private & ~command(["start", "addtask", "mytasks", "stats", "report"]))
+@app.on_message(filters.private & ~command(["start", "help", "addtask", "mytasks", "stats", "report"]))
 async def process_task_description(client, message):
     user_id = message.from_user.id
     
@@ -279,37 +243,7 @@ async def process_task_description(client, message):
     result = tasks_col.insert_one(task_data)
     users_col.update_one({"user_id": user_id}, {"$inc": {"total_tasks": 1}})
     
-    # Delete previous message if exists
-    if user_id in user_last_message:
-        try:
-            await client.delete_messages(user_id, user_last_message[user_id])
-        except:
-            pass
-    
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ Done", callback_data=f"confirm_task_{result.inserted_id}")]
-    ])
-    
-    msg = await message.reply_text(
-        f"✅ Task added: {task_text}\n\n"
-        "Click Done to confirm or send another task.",
-        reply_markup=keyboard
-    )
-    user_last_message[user_id] = msg.id
-
-@app.on_callback_query(filters.regex("^confirm_task_"))
-async def confirm_task(client, callback_query):
-    user_id = callback_query.from_user.id
-    task_id = callback_query.data.split("_")[-1]
-    
-    # Delete confirmation message
-    try:
-        await callback_query.message.delete()
-    except:
-        pass
-    
-    await callback_query.answer("Task confirmed!")
-    await show_tasks(client, callback_query.message)
+    await message.reply_text(f"📌 Task added successfully!\n\n`{task_text}`", parse_mode="Markdown")
 
 @app.on_callback_query(filters.regex("^done_adding_tasks$"))
 async def done_adding_tasks(client, callback_query):
@@ -317,13 +251,8 @@ async def done_adding_tasks(client, callback_query):
     if user_id in user_temp_data:
         user_temp_data.pop(user_id)
     
-    try:
-        await callback_query.message.delete()
-    except:
-        pass
-    
-    await callback_query.answer("Task addition completed!")
-    await show_tasks(client, callback_query.message)
+    await callback_query.message.edit_text("✅ Task addition completed!")
+    await callback_query.answer()
 
 @app.on_callback_query(filters.regex("^task_"))
 async def toggle_task_status(client, callback_query):
@@ -334,7 +263,7 @@ async def toggle_task_status(client, callback_query):
         task = tasks_col.find_one({"_id": ObjectId(task_id), "user_id": user_id})
         
         if not task:
-            await callback_query.answer("Task not found!", show_alert=True)
+            await callback_query.answer("⚠️ Task not found!", show_alert=True)
             return
         
         new_status = not task["is_completed"]
@@ -353,44 +282,11 @@ async def toggle_task_status(client, callback_query):
             schedule_revisions(ObjectId(task_id), user_id)
             record_task_completion(user_id)
         
-        await callback_query.answer("Task status updated!")
-        await update_task_message(client, user_id, callback_query.message.id)
+        await callback_query.answer("🔄 Task status updated!")
+        await update_task_message(callback_query.message, user_id)
     except Exception as e:
         print(f"Error in toggle_task_status: {e}")
-        await callback_query.answer("Error updating task status", show_alert=True)
-
-@app.on_callback_query(filters.regex("^complete_"))
-async def complete_task(client, callback_query):
-    try:
-        task_id = callback_query.data.split("_")[1]
-        user_id = callback_query.from_user.id
-        
-        task = tasks_col.find_one({"_id": ObjectId(task_id), "user_id": user_id})
-        
-        if not task:
-            await callback_query.answer("Task not found!", show_alert=True)
-            return
-        
-        if task["is_completed"]:
-            await callback_query.answer("Task already completed!")
-            return
-        
-        update_data = {
-            "is_completed": True,
-            "completion_date": datetime.now()
-        }
-        
-        tasks_col.update_one({"_id": ObjectId(task_id)}, {"$set": update_data})
-        users_col.update_one({"user_id": user_id}, {"$inc": {"completed_tasks": 1}})
-        
-        schedule_revisions(ObjectId(task_id), user_id)
-        record_task_completion(user_id)
-        
-        await callback_query.answer("Task marked as completed!")
-        await update_task_message(client, user_id, callback_query.message.id)
-    except Exception as e:
-        print(f"Error in complete_task: {e}")
-        await callback_query.answer("Error completing task", show_alert=True)
+        await callback_query.answer("⚠️ Error updating task status", show_alert=True)
 
 @app.on_callback_query(filters.regex("^delete_"))
 async def delete_task(client, callback_query):
@@ -401,59 +297,63 @@ async def delete_task(client, callback_query):
         task = tasks_col.find_one({"_id": ObjectId(task_id), "user_id": user_id})
         
         if not task:
-            await callback_query.answer("Task not found!", show_alert=True)
+            await callback_query.answer("⚠️ Task not found!", show_alert=True)
             return
         
-        # Delete the task and any associated revisions
+        # Delete the task
         tasks_col.delete_one({"_id": ObjectId(task_id)})
-        revisions_col.delete_many({"task_id": ObjectId(task_id)})
         
         # Update user stats
         update_data = {"$inc": {"total_tasks": -1}}
         if task["is_completed"]:
             update_data["$inc"]["completed_tasks"] = -1
-            # Decrement pending revisions count
-            pending_revs = revisions_col.count_documents({
-                "task_id": ObjectId(task_id),
-                "is_done": False
-            })
-            if pending_revs > 0:
-                users_col.update_one(
-                    {"user_id": user_id},
-                    {"$inc": {"pending_revisions": -pending_revs}}
-                )
-        
         users_col.update_one({"user_id": user_id}, update_data)
         
-        await callback_query.answer("Task deleted!")
-        await update_task_message(client, user_id, callback_query.message.id)
+        # Delete related revisions
+        revisions_col.delete_many({"task_id": ObjectId(task_id)})
+        
+        await callback_query.answer("🗑️ Task deleted!")
+        await update_task_message(callback_query.message, user_id)
     except Exception as e:
         print(f"Error in delete_task: {e}")
-        await callback_query.answer("Error deleting task", show_alert=True)
-
-@app.on_callback_query(filters.regex("^done_viewing_tasks$"))
-async def done_viewing_tasks(client, callback_query):
-    user_id = callback_query.from_user.id
-    
-    try:
-        await callback_query.message.delete()
-    except:
-        pass
-    
-    await callback_query.answer("Task viewing completed!")
+        await callback_query.answer("⚠️ Error deleting task", show_alert=True)
 
 @app.on_message(filters.command("mytasks"))
 async def show_tasks(client, message):
     user_id = message.from_user.id
+    tasks = list(tasks_col.find({"user_id": user_id}).sort("created_at", -1))
     
-    # Delete previous message if exists
-    if user_id in user_last_message:
-        try:
-            await client.delete_messages(user_id, user_last_message[user_id])
-        except:
-            pass
+    if not tasks:
+        await message.reply_text("🎉 You don't have any tasks yet!\nUse /addtask to get started.")
+        return
     
-    await update_task_message(client, user_id)
+    completed = sum(1 for t in tasks if t["is_completed"])
+    completion_rate = (completed / len(tasks)) * 100 if tasks else 0
+    
+    keyboard = []
+    for task in tasks:
+        status = "✅" if task["is_completed"] else "◻️"
+        btn_text = f"{status} {task['task_text'][:30]}"  # Limit text length
+        keyboard.append([
+            InlineKeyboardButton(
+                btn_text, 
+                callback_data=f"task_{task['_id']}"
+            ),
+            InlineKeyboardButton(
+                "❌", 
+                callback_data=f"delete_{task['_id']}"
+            )
+        ])
+    
+    progress_text = (
+        f"📋 Your Tasks ({completed}/{len(tasks)} completed - {completion_rate:.1f}%)\n\n"
+        "Click to toggle status | ❌ to delete"
+    )
+    
+    await message.reply_text(
+        progress_text,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
 
 @app.on_callback_query(filters.regex("^revised_"))
 async def mark_as_revised(client, callback_query):
@@ -469,14 +369,14 @@ async def mark_as_revised(client, callback_query):
     
     users_col.update_one({"user_id": user_id}, {"$inc": {"pending_revisions": -1}})
     
-    await callback_query.answer("Great job! Keep revising regularly.")
+    await callback_query.answer("🎯 Great job! Keep revising regularly.")
     await callback_query.message.delete()
 
 @app.on_callback_query(filters.regex("^remind_later_"))
 async def remind_later(client, callback_query):
     parts = callback_query.data.split("_")
-    task_id = parts[1]
-    revision_day = int(parts[2])
+    task_id = parts[2]
+    revision_day = int(parts[3])
     user_id = callback_query.from_user.id
     
     new_time = datetime.now() + timedelta(hours=3)  # Remind after 3 hours
@@ -488,21 +388,24 @@ async def remind_later(client, callback_query):
         args=[app, task_id, user_id, revision_day]
     )
     
-    await callback_query.answer("Okay, I'll remind you again in 3 hours!")
+    await callback_query.answer("⏰ Okay, I'll remind you again in 3 hours!")
     await callback_query.message.delete()
 
 @app.on_message(filters.command("stats"))
 async def show_stats(client, message):
     user_id = message.from_user.id
+    user = users_col.find_one({"user_id": user_id})
     tasks = list(tasks_col.find({"user_id": user_id}))
     
     if not tasks:
-        await message.reply_text("You don't have any tasks yet. Use /addtask to add one.")
+        await message.reply_text("🎯 You don't have any tasks yet!\nUse /addtask to get started.")
         return
     
-    completed = sum(1 for t in tasks if t["is_completed"])
-    completion_rate = (completed / len(tasks)) * 100 if tasks else 0
+    completed = user.get("completed_tasks", 0)
+    total = user.get("total_tasks", 1)  # Avoid division by zero
+    completion_rate = (completed / total) * 100
     
+    # Weekly stats
     week_ago = datetime.now() - timedelta(days=7)
     weekly_completed = tasks_col.count_documents({
         "user_id": user_id,
@@ -510,14 +413,29 @@ async def show_stats(client, message):
         "completion_date": {"$gte": week_ago}
     })
     
+    # Streak calculation
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    streak = 0
+    current_date = today
+    while True:
+        day_stats = stats_col.find_one({"user_id": user_id, "date": current_date})
+        if day_stats and day_stats.get("total", 0) > 0:
+            streak += 1
+            current_date -= timedelta(days=1)
+        else:
+            break
+    
     stats_text = (
-        f"📊 Your Task Statistics\n\n"
-        f"📝 Total Tasks: {len(tasks)}\n"
+        f"📊 *Your Productivity Dashboard*\n\n"
+        f"📌 Total Tasks: {total}\n"
         f"✅ Completed: {completed} ({completion_rate:.1f}%)\n"
         f"📅 Completed this week: {weekly_completed}\n"
+        f"🔥 Current streak: {streak} day{'s' if streak != 1 else ''}\n"
+        f"⏳ Pending revisions: {user.get('pending_revisions', 0)}\n\n"
+        f"💡 *Tip:* Complete at least 1 task daily to maintain your streak!"
     )
     
-    await message.reply_text(stats_text)
+    await message.reply_text(stats_text, parse_mode="Markdown")
 
 @app.on_message(filters.command("report"))
 async def generate_report(client, message):
@@ -526,18 +444,19 @@ async def generate_report(client, message):
     chart = generate_progress_chart(user_id)
     await message.reply_photo(
         photo=chart,
-        caption="📈 Your 30-Day Progress Report"
+        caption="📈 *Your 30-Day Progress Report*\n\nCheck your detailed statistics below:",
+        parse_mode="Markdown"
     )
     
     await show_stats(client, message)
 
 # Run the bot
 if __name__ == "__main__":
-    print("Task Tracker Bot is running...")
+    print("🚀 TaskMaster Pro Bot is running...")
     try:
         app.run()
     except KeyboardInterrupt:
-        print("Bot stopped by user")
+        print("🛑 Bot stopped by user")
     finally:
         scheduler.shutdown()
         mongo_client.close()
