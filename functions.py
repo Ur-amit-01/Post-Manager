@@ -34,7 +34,7 @@ scheduler.start()
 user_temp_data = {}
 
 # Helper Functions
-def schedule_revisions(task_id, user_id, subject):
+def schedule_revisions(task_id, user_id):
     """Schedule revision reminders for a completed task"""
     revision_days = [1, 4, 7, 15, 30]
     created_date = datetime.now()
@@ -45,7 +45,6 @@ def schedule_revisions(task_id, user_id, subject):
         revision_data = {
             "task_id": task_id,
             "user_id": user_id,
-            "subject": subject,
             "revision_date": revision_date,
             "revision_day": day,
             "is_done": False,
@@ -87,19 +86,18 @@ async def send_revision_reminder(client, task_id, user_id, revision_day):
     await client.send_message(
         user_id,
         f"⏰ Revision Reminder (Day {revision_day})\n\n"
-        f"Subject: {task['subject']}\n"
-        f"Topic: {task['task_text']}\n\n"
-        "Have you revised this topic today?",
+        f"Task: {task['task_text']}\n\n"
+        "Have you revised this today?",
         reply_markup=keyboard
     )
 
-def record_task_completion(user_id, subject):
+def record_task_completion(user_id):
     """Record task completion for statistics"""
     today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     
     stats_col.update_one(
         {"user_id": user_id, "date": today},
-        {"$inc": {f"subjects.{subject}": 1, "total": 1}},
+        {"$inc": {"total": 1}},
         upsert=True
     )
 
@@ -155,13 +153,13 @@ async def start(client, message):
     )
     
     await message.reply_text(
-        "📚 NEET Study Tracker Bot\n\n"
-        "Manage your study targets with:\n"
+        "📚 Task Tracker Bot\n\n"
+        "Manage your tasks with:\n"
         "- Task tracking ✓\n"
         "- Spaced repetition ⏰\n"
         "- Progress analytics 📈\n\n"
         "Commands:\n"
-        "/addtask - Add new study target\n"
+        "/addtask - Add new task\n"
         "/mytasks - View your tasks\n"
         "/stats - View your progress\n"
         "/report - Get detailed performance report"
@@ -172,26 +170,15 @@ async def add_task(client, message):
     user_id = message.from_user.id
     
     keyboard = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("Physics", callback_data="addtask_Physics"),
-            InlineKeyboardButton("Chemistry", callback_data="addtask_Chemistry"),
-            InlineKeyboardButton("Biology", callback_data="addtask_Biology")
-        ]
+        [InlineKeyboardButton("✅ Done Adding Tasks", callback_data="done_adding_tasks")]
     ])
     
     await message.reply_text(
-        "Select the subject for your new task:",
+        "Please send me your tasks one by one. Click the button below when you're done:",
         reply_markup=keyboard
     )
-
-@app.on_callback_query(filters.regex("^addtask_"))
-async def process_task_subject(client, callback_query):
-    subject = callback_query.data.split("_")[1]
-    user_id = callback_query.from_user.id
     
-    await callback_query.message.edit_text(f"Now enter your {subject} study target:")
-    
-    user_temp_data[user_id] = {"adding_task": True, "subject": subject}
+    user_temp_data[user_id] = {"adding_task": True}
 
 @app.on_message(filters.private & ~command(["start", "addtask", "mytasks", "stats", "report"]))
 async def process_task_description(client, message):
@@ -201,12 +188,10 @@ async def process_task_description(client, message):
         return
     
     task_text = message.text
-    subject = user_temp_data[user_id]["subject"]
     
     task_data = {
         "user_id": user_id,
         "task_text": task_text,
-        "subject": subject,
         "created_at": datetime.now(),
         "is_completed": False,
         "completion_date": None,
@@ -216,8 +201,16 @@ async def process_task_description(client, message):
     tasks_col.insert_one(task_data)
     users_col.update_one({"user_id": user_id}, {"$inc": {"total_tasks": 1}})
     
-    await message.reply_text(f"✅ {subject} task added: {task_text}")
-    user_temp_data.pop(user_id, None)
+    await message.reply_text(f"✅ Task added: {task_text}")
+
+@app.on_callback_query(filters.regex("^done_adding_tasks$"))
+async def done_adding_tasks(client, callback_query):
+    user_id = callback_query.from_user.id
+    if user_id in user_temp_data:
+        user_temp_data.pop(user_id)
+    
+    await callback_query.message.edit_text("Task addition completed!")
+    await callback_query.answer()
 
 @app.on_message(filters.command("mytasks"))
 async def show_tasks(client, message):
@@ -233,21 +226,12 @@ async def show_tasks(client, message):
     
     keyboard = []
     for task in tasks:
-        status = "✅" if task["is_completed"] else "🔄"
-        subject_icon = {
-            "Physics": "⚛️",
-            "Chemistry": "🧪",
-            "Biology": "🧬"
-        }.get(task["subject"], "📝")
-        
-        btn_text = f"{status} {subject_icon} {task['task_text']}"
+        status = "✅" if task["is_completed"] else "☐"
+        btn_text = f"{status} {task['task_text']}"
         keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"task_{task['_id']}")])
     
     progress_text = (
-        f"📊 Your Progress: {completed}/{len(tasks)} tasks completed ({completion_rate:.1f}%)\n"
-        f"⚛️ Physics: {sum(1 for t in tasks if t['subject'] == 'Physics' and t['is_completed'])}/{sum(1 for t in tasks if t['subject'] == 'Physics')}\n"
-        f"🧪 Chemistry: {sum(1 for t in tasks if t['subject'] == 'Chemistry' and t['is_completed'])}/{sum(1 for t in tasks if t['subject'] == 'Chemistry')}\n"
-        f"🧬 Biology: {sum(1 for t in tasks if t['subject'] == 'Biology' and t['is_completed'])}/{sum(1 for t in tasks if t['subject'] == 'Biology')}\n\n"
+        f"📊 Your Progress: {completed}/{len(tasks)} tasks completed ({completion_rate:.1f}%)\n\n"
         "Click on a task to toggle its status:"
     )
     
@@ -261,9 +245,15 @@ async def toggle_task_status(client, callback_query):
     task_id = callback_query.data.split("_")[1]
     user_id = callback_query.from_user.id
     
-    task = tasks_col.find_one({"_id": task_id, "user_id": user_id})
+    # Convert task_id to ObjectId if needed (assuming MongoDB)
+    from bson.objectid import ObjectId
+    try:
+        task = tasks_col.find_one({"_id": ObjectId(task_id), "user_id": user_id})
+    except:
+        task = tasks_col.find_one({"_id": task_id, "user_id": user_id})
+    
     if not task:
-        await callback_query.answer("Task not found!")
+        await callback_query.answer("Task not found!", show_alert=True)
         return
     
     new_status = not task["is_completed"]
@@ -272,12 +262,12 @@ async def toggle_task_status(client, callback_query):
         "completion_date": datetime.now() if new_status else None
     }
     
-    tasks_col.update_one({"_id": task_id}, {"$set": update_data})
+    tasks_col.update_one({"_id": task["_id"]}, {"$set": update_data})
     users_col.update_one({"user_id": user_id}, {"$inc": {"completed_tasks": 1 if new_status else -1}})
     
     if new_status:
-        schedule_revisions(task_id, user_id, task["subject"])
-        record_task_completion(user_id, task["subject"])
+        schedule_revisions(task["_id"], user_id)
+        record_task_completion(user_id)
     
     await callback_query.answer("Task status updated!")
     await show_tasks(client, callback_query.message)
@@ -330,17 +320,6 @@ async def show_stats(client, message):
     completed = sum(1 for t in tasks if t["is_completed"])
     completion_rate = (completed / len(tasks)) * 100 if tasks else 0
     
-    subjects = ["Physics", "Chemistry", "Biology"]
-    subject_stats = {}
-    for subject in subjects:
-        total = sum(1 for t in tasks if t["subject"] == subject)
-        done = sum(1 for t in tasks if t["subject"] == subject and t["is_completed"])
-        subject_stats[subject] = {
-            "total": total,
-            "done": done,
-            "percent": (done / total * 100) if total else 0
-        }
-    
     week_ago = datetime.now() - timedelta(days=7)
     weekly_completed = tasks_col.count_documents({
         "user_id": user_id,
@@ -349,24 +328,11 @@ async def show_stats(client, message):
     })
     
     stats_text = (
-        f"📊 Your Study Statistics\n\n"
+        f"📊 Your Task Statistics\n\n"
         f"📝 Total Tasks: {len(tasks)}\n"
         f"✅ Completed: {completed} ({completion_rate:.1f}%)\n"
-        f"📅 Completed this week: {weekly_completed}\n\n"
-        f"Subject-wise Completion:\n"
+        f"📅 Completed this week: {weekly_completed}\n"
     )
-    
-    for subject, stats in subject_stats.items():
-        icon = {
-            "Physics": "⚛️",
-            "Chemistry": "🧪",
-            "Biology": "🧬"
-        }[subject]
-        
-        stats_text += (
-            f"{icon} {subject}: {stats['done']}/{stats['total']} "
-            f"({stats['percent']:.1f}%)\n"
-        )
     
     await message.reply_text(stats_text)
 
@@ -384,7 +350,7 @@ async def generate_report(client, message):
 
 # Run the bot
 if __name__ == "__main__":
-    print("NEET Study Tracker Bot is running...")
+    print("Task Tracker Bot is running...")
     try:
         app.run()
     except KeyboardInterrupt:
