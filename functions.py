@@ -1,337 +1,393 @@
 import os
-import asyncio
 from datetime import datetime, timedelta
-from typing import Dict, Optional, List
+from io import BytesIO
 
-from pyrogram import Client, filters
-from pyrogram.types import (
-    Message, 
-    InlineKeyboardMarkup, 
-    InlineKeyboardButton,
-    CallbackQuery
-)
+import matplotlib.pyplot as plt
+from apscheduler.schedulers.background import BackgroundScheduler
 from pymongo import MongoClient
+from pyrogram import Client, filters
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from config import *
 
+# Initialize Pyrogram Client
+app = Client(
+    "neet_todo_bot",
+    api_id=API_ID,
+    api_hash=API_HASH,
+    bot_token=BOT_TOKEN
+)
 
-# --- Configuration --- #
-class Config:
-    REVIEW_SCHEDULE = [1, 4, 7, 15, 30]  # Spaced repetition intervals
-    PRIORITY_EMOJIS = {1: "🔥", 2: "🔼", 3: "🔽"}
-    PRIORITY_NAMES = {1: "High", 2: "Medium", 3: "Low"}
-    SUBJECTS = ["Physics", "Chemistry", "Biology", "Other"]
-
-# --- MongoDB Setup --- #
+# MongoDB Setup
 mongo_client = MongoClient(DB_URL)
-db = mongo_client[DB_NAME]
-users_collection = db["users"]
-tasks_collection = db["tasks"]
+db = mongo_client["neet_study_bot"]
+users_col = db["users"]
+tasks_col = db["tasks"]
+revisions_col = db["revisions"]
+stats_col = db["statistics"]
 
-# Ensure indexes
-tasks_collection.create_index([("user_id", 1)])
-tasks_collection.create_index([("next_review", 1)])
-tasks_collection.create_index([("user_id", 1), ("completed_date", 1)])
+# Scheduler for reminders
+scheduler = BackgroundScheduler()
+scheduler.start()
 
-# --- Bot Setup --- #
-app = Client("neet_study_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
-# --- State Management --- #
-user_states: Dict[int, Dict] = {}
+# Temporary storage for task creation
+user_temp_data = {}
 
-# --- Keyboard Utilities --- #
-def main_menu_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("➕ Add Task", callback_data="add_task")],
-        [
-            InlineKeyboardButton("✅ Completed", callback_data="mark_completed"),
-            InlineKeyboardButton("📚 View Tasks", callback_data="view_tasks")
-        ],
-        [InlineKeyboardButton("📊 Progress", callback_data="view_progress")]
-    ])
-
-def subject_kb() -> InlineKeyboardMarkup:
-    buttons = []
-    for subject in Config.SUBJECTS:
-        buttons.append([InlineKeyboardButton(subject, callback_data=f"subject_{subject}")])
-    return InlineKeyboardMarkup(buttons)
-
-def priority_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton(f"{Config.PRIORITY_EMOJIS[1]} High Priority", callback_data="priority_1")],
-        [InlineKeyboardButton(f"{Config.PRIORITY_EMOJIS[2]} Medium Priority", callback_data="priority_2")],
-        [InlineKeyboardButton(f"{Config.PRIORITY_EMOJIS[3]} Low Priority", callback_data="priority_3")]
-    ])
-
-def review_kb(task_id: str, stage: int) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ Reviewed", callback_data=f"reviewed_{task_id}_{stage}")],
-        [InlineKeyboardButton("⏰ Remind Later", callback_data=f"postpone_{task_id}")]
-    ])
-
-def task_action_kb(task_id: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ Mark Completed", callback_data=f"complete_{task_id}")],
-        [InlineKeyboardButton("✏️ Edit Task", callback_data=f"edit_{task_id}")],
-        [InlineKeyboardButton("🗑️ Delete Task", callback_data=f"delete_{task_id}")]
-    ])
-
-# --- Helper Functions --- #
-def format_task(task: Dict) -> str:
-    status = "✅" if task.get("completed_date") else "🟡"
-    priority = Config.PRIORITY_EMOJIS.get(task.get("priority", 2), "")
+# Helper Functions
+def schedule_revisions(task_id, user_id, subject):
+    """Schedule revision reminders for a completed task"""
+    revision_days = [1, 4, 7, 15, 30]
+    created_date = datetime.now()
     
-    text = f"{status} {priority} **{task['subject']} - {task['topic']}**\n"
-    text += f"📝 {task['details']}\n"
-    
-    if task.get("completed_date"):
-        text += f"📅 Completed: {task['completed_date'].strftime('%d %b %Y')}\n"
-        if task.get("next_review"):
-            text += f"🔁 Next Review: {task['next_review'].strftime('%d %b %Y')}\n"
-    
-    return text
-
-def schedule_next_review(current_stage: int) -> Optional[datetime]:
-    if current_stage >= len(Config.REVIEW_SCHEDULE):
-        return None
-    return datetime.now() + timedelta(days=Config.REVIEW_SCHEDULE[current_stage])
-
-# --- Command Handlers --- #
-@app.on_message(filters.command("start"))
-async def start(client: Client, message: Message):
-    user = message.from_user
-    
-    # Add user to database if not exists
-    if not users_collection.find_one({"user_id": user.id}):
-        users_collection.insert_one({
-            "user_id": user.id,
-            "username": user.username,
-            "first_name": user.first_name,
-            "last_name": user.last_name,
-            "join_date": datetime.now(),
-            "last_active": datetime.now()
-        })
-    
-    welcome_msg = f"""
-    🎖 **Welcome {user.first_name} to NEET Study Tracker!** 🎖
-
-    I'll help you:
-    - Track your study targets
-    - Remind you to revise using spaced repetition
-    - Monitor your progress
-
-    **Choose an option below to get started:**
-    """
-    
-    await message.reply_text(welcome_msg, reply_markup=main_menu_kb())
-
-# --- Callback Handlers --- #
-@app.on_callback_query(filters.regex("^add_task$"))
-async def add_task_cb(client: Client, callback: CallbackQuery):
-    user_states[callback.from_user.id] = {"action": "add_task", "step": "subject"}
-    await callback.message.edit_text(
-        "📚 **Select Subject:**",
-        reply_markup=subject_kb()
-    )
-    await callback.answer()
-
-@app.on_callback_query(filters.regex("^subject_"))
-async def subject_selected(client: Client, callback: CallbackQuery):
-    subject = callback.data.split("_")[1]
-    user_states[callback.from_user.id].update({
-        "subject": subject,
-        "step": "topic"
-    })
-    await callback.message.edit_text(
-        f"📖 **{subject} - Enter Topic/Chapter:**\n\n"
-        "(Example: 'Organic Chemistry - Hydrocarbons')"
-    )
-    await callback.answer()
-
-@app.on_message(filters.text & ~filters.command(["start", "help"]))
-async def handle_text_input(client: Client, message: Message):
-    user_id = message.from_user.id
-    if user_id not in user_states:
-        return
-    
-    state = user_states[user_id]
-    if state["action"] == "add_task":
-        if state["step"] == "topic":
-            state.update({
-                "topic": message.text,
-                "step": "details"
-            })
-            await message.reply_text(
-                "📝 **Enter Details/Specifics:**\n\n"
-                "(Example: 'Practice named reactions from page 45-50')"
-            )
-        elif state["step"] == "details":
-            state.update({
-                "details": message.text,
-                "step": "priority"
-            })
-            await message.reply_text(
-                "⚡ **Set Priority Level:**",
-                reply_markup=priority_kb()
-            )
-
-@app.on_callback_query(filters.regex("^priority_"))
-async def priority_selected(client: Client, callback: CallbackQuery):
-    priority = int(callback.data.split("_")[1])
-    user_id = callback.from_user.id
-    state = user_states[user_id]
-    
-    task = {
-        "user_id": user_id,
-        "subject": state["subject"],
-        "topic": state["topic"],
-        "details": state["details"],
-        "priority": priority,
-        "created_at": datetime.now(),
-        "completed_date": None,
-        "next_review": None,
-        "review_stage": 0
-    }
-    
-    tasks_collection.insert_one(task)
-    
-    del user_states[user_id]
-    await callback.message.edit_text(
-        "🎉 **Task Added Successfully!**\n\n"
-        f"**{state['subject']} - {state['topic']}**\n"
-        f"Priority: {Config.PRIORITY_NAMES[priority]}\n\n"
-        f"Details: {state['details']}",
-        reply_markup=main_menu_kb()
-    )
-    await callback.answer()
-
-@app.on_callback_query(filters.regex("^mark_completed$"))
-async def mark_completed_cb(client: Client, callback: CallbackQuery):
-    tasks = list(tasks_collection.find({
-        "user_id": callback.from_user.id,
-        "completed_date": None
-    }).sort("created_at", -1).limit(10))
-    
-    if not tasks:
-        await callback.answer("You have no pending tasks!")
-        return
-    
-    buttons = []
-    for task in tasks:
-        btn_text = f"{task['subject'][:5]}... - {task['topic'][:15]}..."
-        buttons.append([InlineKeyboardButton(btn_text, callback_data=f"complete_{task['_id']}")])
-    
-    await callback.message.edit_text(
-        "✅ **Select Task to Mark as Completed:**",
-        reply_markup=InlineKeyboardMarkup(buttons)
-    )
-    await callback.answer()
-
-@app.on_callback_query(filters.regex("^complete_"))
-async def complete_task_cb(client: Client, callback: CallbackQuery):
-    task_id = callback.data.split("_")[1]
-    result = tasks_collection.update_one(
-        {"_id": task_id},
-        {"$set": {
-            "completed_date": datetime.now(),
-            "next_review": datetime.now() + timedelta(days=1),
-            "review_stage": 1
-        }}
-    )
-    
-    if result.modified_count > 0:
-        task = tasks_collection.find_one({"_id": task_id})
-        await callback.message.edit_text(
-            f"🎯 **Task Marked Completed!**\n\n{format_task(task)}",
-            reply_markup=main_menu_kb()
+    for day in revision_days:
+        revision_date = created_date + timedelta(days=day)
+        
+        revision_data = {
+            "task_id": task_id,
+            "user_id": user_id,
+            "subject": subject,
+            "revision_date": revision_date,
+            "revision_day": day,
+            "is_done": False,
+            "reminder_sent": False
+        }
+        
+        revisions_col.insert_one(revision_data)
+        
+        scheduler.add_job(
+            send_revision_reminder,
+            'date',
+            run_date=revision_date,
+            args=[app, task_id, user_id, day]
         )
-    await callback.answer()
-
-@app.on_callback_query(filters.regex("^view_tasks$"))
-async def view_tasks_cb(client: Client, callback: CallbackQuery):
-    tasks = list(tasks_collection.find({
-        "user_id": callback.from_user.id
-    }).sort([("completed_date", -1), ("created_at", -1)]).limit(5))
     
-    if not tasks:
-        await callback.answer("You have no tasks yet!")
+    users_col.update_one(
+        {"user_id": user_id},
+        {"$inc": {"pending_revisions": len(revision_days)}}
+    )
+
+async def send_revision_reminder(client, task_id, user_id, revision_day):
+    """Send revision reminder to user"""
+    task = tasks_col.find_one({"_id": task_id})
+    if not task:
         return
     
-    response = "📚 **Your Tasks:**\n\n"
-    for task in tasks:
-        response += format_task(task) + "\n"
-    
-    total_tasks = tasks_collection.count_documents({"user_id": callback.from_user.id})
-    if total_tasks > 5:
-        response += f"\n...and {total_tasks-5} more tasks"
-    
-    await callback.message.edit_text(
-        response,
-        reply_markup=main_menu_kb()
+    revisions_col.update_one(
+        {"task_id": task_id, "user_id": user_id, "revision_day": revision_day},
+        {"$set": {"reminder_sent": True, "reminder_sent_at": datetime.now()}}
     )
-    await callback.answer()
-
-# --- Review System --- #
-async def send_review_reminders():
-    while True:
-        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        tasks = list(tasks_collection.find({
-            "next_review": {"$lte": today}
-        }))
-        
-        for task in tasks:
-            try:
-                await app.send_message(
-                    task["user_id"],
-                    f"⏰ **Review Reminder!**\n\n{format_task(task)}\n\n"
-                    "Have you reviewed this material?",
-                    reply_markup=review_kb(str(task["_id"]), task.get("review_stage", 1))
-                )
-            except Exception as e:
-                print(f"Failed to send reminder: {e}")
-        
-        await asyncio.sleep(60 * 60 * 24)  # Check daily
-
-@app.on_callback_query(filters.regex("^reviewed_"))
-async def reviewed_cb(client: Client, callback: CallbackQuery):
-    _, task_id, stage = callback.data.split("_")
-    stage = int(stage)
     
-    next_review = schedule_next_review(stage)
-    update_data = {
-        "review_stage": stage + 1,
-        "last_reviewed": datetime.now()
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Revised", callback_data=f"revised_{task_id}_{revision_day}"),
+            InlineKeyboardButton("⏰ Remind Later", callback_data=f"remind_later_{task_id}_{revision_day}")
+        ]
+    ])
+    
+    await client.send_message(
+        user_id,
+        f"⏰ Revision Reminder (Day {revision_day})\n\n"
+        f"Subject: {task['subject']}\n"
+        f"Topic: {task['task_text']}\n\n"
+        "Have you revised this topic today?",
+        reply_markup=keyboard
+    )
+
+def record_task_completion(user_id, subject):
+    """Record task completion for statistics"""
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    stats_col.update_one(
+        {"user_id": user_id, "date": today},
+        {"$inc": {f"subjects.{subject}": 1, "total": 1}},
+        upsert=True
+    )
+
+def generate_progress_chart(user_id):
+    """Generate progress chart for the user"""
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    dates = []
+    completed = []
+    for i in range(30, -1, -1):
+        date = (datetime.now() - timedelta(days=i)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        dates.append(date.strftime("%d %b"))
+        
+        stats = stats_col.find_one({"user_id": user_id, "date": date})
+        completed.append(stats["total"] if stats else 0)
+    
+    ax.bar(dates, completed, color='skyblue')
+    ax.set_title("Tasks Completed in Last 30 Days")
+    ax.set_xlabel("Date")
+    ax.set_ylabel("Tasks Completed")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    
+    buf = BytesIO()
+    plt.savefig(buf, format='png')
+    buf.seek(0)
+    plt.close()
+    
+    return buf
+
+# Command Handlers
+@app.on_message(filters.command("start"))
+async def start(client, message):
+    user_id = message.from_user.id
+    user_data = {
+        "user_id": user_id,
+        "username": message.from_user.username,
+        "first_name": message.from_user.first_name,
+        "last_name": message.from_user.last_name or "",
+        "join_date": datetime.now(),
+        "last_active": datetime.now(),
+        "total_tasks": 0,
+        "completed_tasks": 0,
+        "pending_revisions": 0
     }
     
-    if next_review:
-        update_data["next_review"] = next_review
-    else:
-        update_data["next_review"] = None
-    
-    result = tasks_collection.update_one(
-        {"_id": task_id},
-        {"$set": update_data}
+    users_col.update_one(
+        {"user_id": user_id},
+        {"$setOnInsert": user_data},
+        upsert=True
     )
     
-    if result.modified_count > 0:
-        if next_review:
-            await callback.message.edit_text(
-                f"📚 **Review Logged!**\n\n"
-                f"Next review on {next_review.strftime('%d %b %Y')}",
-                reply_markup=main_menu_kb()
-            )
-        else:
-            await callback.message.edit_text(
-                "🎉 **Review Cycle Complete!**\n\n"
-                "You've finished all scheduled reviews for this topic!",
-                reply_markup=main_menu_kb()
-            )
-    await callback.answer()
+    await message.reply_text(
+        "📚 NEET Study Tracker Bot\n\n"
+        "Manage your study targets with:\n"
+        "- Task tracking ✓\n"
+        "- Spaced repetition ⏰\n"
+        "- Progress analytics 📈\n\n"
+        "Commands:\n"
+        "/addtask - Add new study target\n"
+        "/mytasks - View your tasks\n"
+        "/stats - View your progress\n"
+        "/report - Get detailed performance report"
+    )
 
-# --- Main Loop --- #
-async def main():
-    await app.start()
-    print("Bot started!")
-    asyncio.create_task(send_review_reminders())
-    await asyncio.Event().wait()
+@app.on_message(filters.command("addtask"))
+async def add_task(client, message):
+    user_id = message.from_user.id
+    
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("Physics", callback_data="addtask_Physics"),
+            InlineKeyboardButton("Chemistry", callback_data="addtask_Chemistry"),
+            InlineKeyboardButton("Biology", callback_data="addtask_Biology")
+        ]
+    ])
+    
+    await message.reply_text(
+        "Select the subject for your new task:",
+        reply_markup=keyboard
+    )
 
+@app.on_callback_query(filters.regex("^addtask_"))
+async def process_task_subject(client, callback_query):
+    subject = callback_query.data.split("_")[1]
+    user_id = callback_query.from_user.id
+    
+    await callback_query.message.edit_text(f"Now enter your {subject} study target:")
+    
+    user_temp_data[user_id] = {"adding_task": True, "subject": subject}
+
+@app.on_message(filters.private & ~filters.command)
+async def process_task_description(client, message):
+    user_id = message.from_user.id
+    
+    if not user_temp_data.get(user_id, {}).get("adding_task"):
+        return
+    
+    task_text = message.text
+    subject = user_temp_data[user_id]["subject"]
+    
+    task_data = {
+        "user_id": user_id,
+        "task_text": task_text,
+        "subject": subject,
+        "created_at": datetime.now(),
+        "is_completed": False,
+        "completion_date": None,
+        "priority": 1
+    }
+    
+    tasks_col.insert_one(task_data)
+    users_col.update_one({"user_id": user_id}, {"$inc": {"total_tasks": 1}})
+    
+    await message.reply_text(f"✅ {subject} task added: {task_text}")
+    user_temp_data.pop(user_id, None)
+
+@app.on_message(filters.command("mytasks"))
+async def show_tasks(client, message):
+    user_id = message.from_user.id
+    tasks = list(tasks_col.find({"user_id": user_id}).sort("created_at", -1))
+    
+    if not tasks:
+        await message.reply_text("You don't have any tasks yet. Use /addtask to add one.")
+        return
+    
+    completed = sum(1 for t in tasks if t["is_completed"])
+    completion_rate = (completed / len(tasks)) * 100 if tasks else 0
+    
+    keyboard = []
+    for task in tasks:
+        status = "✅" if task["is_completed"] else "🔄"
+        subject_icon = {
+            "Physics": "⚛️",
+            "Chemistry": "🧪",
+            "Biology": "🧬"
+        }.get(task["subject"], "📝")
+        
+        btn_text = f"{status} {subject_icon} {task['task_text']}"
+        keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"task_{task['_id']}")])
+    
+    progress_text = (
+        f"📊 Your Progress: {completed}/{len(tasks)} tasks completed ({completion_rate:.1f}%)\n"
+        f"⚛️ Physics: {sum(1 for t in tasks if t['subject'] == 'Physics' and t['is_completed'])}/{sum(1 for t in tasks if t['subject'] == 'Physics')}\n"
+        f"🧪 Chemistry: {sum(1 for t in tasks if t['subject'] == 'Chemistry' and t['is_completed'])}/{sum(1 for t in tasks if t['subject'] == 'Chemistry')}\n"
+        f"🧬 Biology: {sum(1 for t in tasks if t['subject'] == 'Biology' and t['is_completed'])}/{sum(1 for t in tasks if t['subject'] == 'Biology')}\n\n"
+        "Click on a task to toggle its status:"
+    )
+    
+    await message.reply_text(
+        progress_text,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@app.on_callback_query(filters.regex("^task_"))
+async def toggle_task_status(client, callback_query):
+    task_id = callback_query.data.split("_")[1]
+    user_id = callback_query.from_user.id
+    
+    task = tasks_col.find_one({"_id": task_id, "user_id": user_id})
+    if not task:
+        await callback_query.answer("Task not found!")
+        return
+    
+    new_status = not task["is_completed"]
+    update_data = {
+        "is_completed": new_status,
+        "completion_date": datetime.now() if new_status else None
+    }
+    
+    tasks_col.update_one({"_id": task_id}, {"$set": update_data})
+    users_col.update_one({"user_id": user_id}, {"$inc": {"completed_tasks": 1 if new_status else -1}})
+    
+    if new_status:
+        schedule_revisions(task_id, user_id, task["subject"])
+        record_task_completion(user_id, task["subject"])
+    
+    await callback_query.answer("Task status updated!")
+    await show_tasks(client, callback_query.message)
+
+@app.on_callback_query(filters.regex("^revised_"))
+async def mark_as_revised(client, callback_query):
+    parts = callback_query.data.split("_")
+    task_id = parts[1]
+    revision_day = int(parts[2])
+    user_id = callback_query.from_user.id
+    
+    revisions_col.update_one(
+        {"task_id": task_id, "user_id": user_id, "revision_day": revision_day},
+        {"$set": {"is_done": True, "completed_at": datetime.now()}}
+    )
+    
+    users_col.update_one({"user_id": user_id}, {"$inc": {"pending_revisions": -1}})
+    
+    await callback_query.answer("Great job! Keep revising regularly.")
+    await callback_query.message.delete()
+
+@app.on_callback_query(filters.regex("^remind_later_"))
+async def remind_later(client, callback_query):
+    parts = callback_query.data.split("_")
+    task_id = parts[2]
+    revision_day = int(parts[3])
+    user_id = callback_query.from_user.id
+    
+    new_time = datetime.now() + timedelta(hours=3)  # Remind after 3 hours
+    
+    scheduler.add_job(
+        send_revision_reminder,
+        'date',
+        run_date=new_time,
+        args=[app, task_id, user_id, revision_day]
+    )
+    
+    await callback_query.answer("Okay, I'll remind you again in 3 hours!")
+    await callback_query.message.delete()
+
+@app.on_message(filters.command("stats"))
+async def show_stats(client, message):
+    user_id = message.from_user.id
+    tasks = list(tasks_col.find({"user_id": user_id}))
+    
+    if not tasks:
+        await message.reply_text("You don't have any tasks yet. Use /addtask to add one.")
+        return
+    
+    completed = sum(1 for t in tasks if t["is_completed"])
+    completion_rate = (completed / len(tasks)) * 100 if tasks else 0
+    
+    subjects = ["Physics", "Chemistry", "Biology"]
+    subject_stats = {}
+    for subject in subjects:
+        total = sum(1 for t in tasks if t["subject"] == subject)
+        done = sum(1 for t in tasks if t["subject"] == subject and t["is_completed"])
+        subject_stats[subject] = {
+            "total": total,
+            "done": done,
+            "percent": (done / total * 100) if total else 0
+        }
+    
+    week_ago = datetime.now() - timedelta(days=7)
+    weekly_completed = tasks_col.count_documents({
+        "user_id": user_id,
+        "is_completed": True,
+        "completion_date": {"$gte": week_ago}
+    })
+    
+    stats_text = (
+        f"📊 Your Study Statistics\n\n"
+        f"📝 Total Tasks: {len(tasks)}\n"
+        f"✅ Completed: {completed} ({completion_rate:.1f}%)\n"
+        f"📅 Completed this week: {weekly_completed}\n\n"
+        f"Subject-wise Completion:\n"
+    )
+    
+    for subject, stats in subject_stats.items():
+        icon = {
+            "Physics": "⚛️",
+            "Chemistry": "🧪",
+            "Biology": "🧬"
+        }[subject]
+        
+        stats_text += (
+            f"{icon} {subject}: {stats['done']}/{stats['total']} "
+            f"({stats['percent']:.1f}%)\n"
+        )
+    
+    await message.reply_text(stats_text)
+
+@app.on_message(filters.command("report"))
+async def generate_report(client, message):
+    user_id = message.from_user.id
+    
+    chart = generate_progress_chart(user_id)
+    await message.reply_photo(
+        photo=chart,
+        caption="📈 Your 30-Day Progress Report"
+    )
+    
+    await show_stats(client, message)
+
+# Run the bot
 if __name__ == "__main__":
-    asyncio.run(main())
+    print("NEET Study Tracker Bot is running...")
+    try:
+        app.run()
+    except KeyboardInterrupt:
+        print("Bot stopped by user")
+    finally:
+        scheduler.shutdown()
+        mongo_client.close()
