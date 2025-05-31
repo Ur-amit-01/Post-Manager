@@ -217,7 +217,7 @@ async def start(client, message):
         keyboard.inline_keyboard.append([InlineKeyboardButton("💎 Get Premium", callback_data="premium_info")])
     
     await message.reply_photo(
-        photo="https://telegra.ph/file/5e53a3e5a5a3e9a5e5a3e.jpg",
+        photo="https://raw.githubusercontent.com/Ur-amit-01/minimalistic-wallpaper-collection/main/images/tienphat-night-landscape.jpg",
         caption=(
             "🌟 *Welcome to TaskMaster Pro!* 🌟\n\n"
             "🚀 *Supercharge your productivity with:*\n"
