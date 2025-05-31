@@ -446,7 +446,7 @@ async def process_admin_broadcast(client, message):
     await progress_msg.edit_text(f"✅ Broadcast completed!\n\nTotal users: {total}\nSuccessfully sent: {success}\nFailed: {total - success}")
     await message.reply_text("🔙 Returning to admin panel...", reply_markup=InlineKeyboardMarkup([
         [InlineKeyboardButton("👑 Admin Panel", callback_data="admin_panel")]
-    ))
+    ]))
 
 @app.on_message(filters.command("addtask"))
 async def add_task(client, message):
