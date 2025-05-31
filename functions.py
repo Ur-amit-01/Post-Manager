@@ -36,7 +36,7 @@ scheduler.start()
 user_temp_data = {}
 
 # Admin IDs from config
-ADMINS = ADMIN_IDS
+ADMINS = 7150972327
 
 # Helper Functions
 def schedule_revisions(task_id, user_id):
