@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from taskmaster_bot import app, mongo_client, ADMINS, is_premium
+from taskmaster_bot import app, mongo_client, is_premium
 from config import *
 from bson.objectid import ObjectId
 
