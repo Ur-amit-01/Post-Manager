@@ -219,7 +219,7 @@ async def start(client, message):
         keyboard.inline_keyboard.append([InlineKeyboardButton("👑 Admin Panel", callback_data="admin_panel")])
     
     await message.reply_photo(
-        photo="https://telegra.ph/file/5e53a3e5a5a3e9a5e5a3e.jpg",  # Replace with your image URL
+        photo="FORCE_PIC",  # Replace with your image URL
         caption=(
             "🌟 *Welcome to TaskMaster Pro - Your Ultimate Productivity Companion!* 🌟\n\n"
             "🚀 *Supercharge your productivity with:*\n"
