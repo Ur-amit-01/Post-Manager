@@ -14,7 +14,7 @@ PORT = os.environ.get("PORT", "8080")
 
 RENAME_MODE = bool(environ.get('RENAME_MODE', True)) # Set True or False
 ERROR_MESSAGE = bool(os.environ.get('ERROR_MESSAGE', False)) # Set True or False
-NEW_REQ_MODE = bool(environ.get('NEW_REQ_MODE', False)) # Set True or False
+NEW_REQ_MODE = bool(environ.get('NEW_REQ_MODE', True)) # Set True or False
 SESSION_STRING = os.environ.get("SESSION_STRING", "")
 
 START_PIC = os.environ.get("START_PIC", "")
