@@ -107,7 +107,7 @@ async def approve_new(client, m):
         try:
             await client.send_message(
                 m.from_user.id,
-                f"**• Hello {m.from_user.mention}! 👋🏻\n• Your request for {m.chat.title} is accepted.**\n\n> **• Powered by: @Stellar_Bots x @Team_SAT_25**"
+                f"**• Hello {m.from_user.mention}! 👋🏻\n• Your request for {m.chat.title} is accepted.**"
             )
         except:
             pass
