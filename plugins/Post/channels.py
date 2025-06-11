@@ -128,24 +128,18 @@ async def manage_admins(client, message: Message):
 
             try:
                 # Check if bot is admin in the channel
-                chat = await client.get_chat(channel_id)
                 bot_member = await client.get_chat_member(channel_id, "me")
                 
-                if not bot_member.privileges:
-                    results.append(f"❌ {channel_name} - Bot not admin")
-                    failed_count += 1
-                    continue
-
-                # Check if bot has appropriate rights
-                required_right = ChatPrivileges(can_promote_members=True)
-                if not bot_member.privileges.can_promote_members:
+                if not bot_member.can_promote_members:
                     results.append(f"❌ {channel_name} - No promote rights")
                     failed_count += 1
                     continue
 
                 if action == "promote":
-                    # Promote with basic admin privileges (customize as needed)
-                    privileges = ChatPrivileges(
+                    # Promote with basic admin privileges
+                    await client.promote_chat_member(
+                        chat_id=channel_id,
+                        user_id=user_id,
                         can_change_info=False,
                         can_post_messages=True,
                         can_edit_messages=True,
@@ -158,11 +152,6 @@ async def manage_admins(client, message: Message):
                         can_manage_video_chats=True,
                         is_anonymous=False
                     )
-                    await client.promote_chat_member(
-                        chat_id=channel_id,
-                        user_id=user_id,
-                        privileges=privileges
-                    )
                     results.append(f"✅ {channel_name} - Promoted")
                     success_count += 1
                 else:
@@ -170,7 +159,17 @@ async def manage_admins(client, message: Message):
                     await client.promote_chat_member(
                         chat_id=channel_id,
                         user_id=user_id,
-                        privileges=ChatPrivileges()
+                        can_change_info=False,
+                        can_post_messages=False,
+                        can_edit_messages=False,
+                        can_delete_messages=False,
+                        can_restrict_members=False,
+                        can_invite_users=False,
+                        can_pin_messages=False,
+                        can_promote_members=False,
+                        can_manage_chat=False,
+                        can_manage_video_chats=False,
+                        is_anonymous=False
                     )
                     results.append(f"✅ {channel_name} - Demoted")
                     success_count += 1
