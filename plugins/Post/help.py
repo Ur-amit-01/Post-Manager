@@ -1,6 +1,6 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
-from constants import MAIN_HELP_TXT
+from plugins.Post.constants import MAIN_HELP_TXT
 
 @Client.on_message(filters.command("help") & filters.private)
 async def help_command(client, message: Message):
