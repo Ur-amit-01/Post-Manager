@@ -154,7 +154,7 @@ async def manage_admins(client, message: Message):
                 results.append(f"✅ {channel_name} - {action_result}")
                 success_count += 1
 
-                await asyncio.sleep(0.3)  # Rate limiting
+                await asyncio.sleep(0.5)  # Rate limiting
 
             except Exception as e:
                 error_msg = str(e).lower()
