@@ -137,32 +137,26 @@ async def process_token_reply(client: Client, message: Message):
         }))
 
 @Client.on_message(filters.command(["amit", "tawheed", "twhd", "kabir", "batman"]))
-async def handle_multi_commands(client: Client, message: Message):
-    """Handle multiple commands that serve the same function"""
+async def handle_amit_command(client: Client, message: Message):
+    """Handle /amit command"""
     text = message.text.strip()
     user_id = message.from_user.id
     
-    # Extract the actual command used (for logging if needed)
-    command_used = message.command[0].lower()
-    
-    # If only command is sent without link
-    if len(text.split()) == 1:
+    # If only /amit is sent
+    if text == "/amit":
         example_text = (
             "> **Send links in this format 👇🏻**\n"
-            f"> **/{command_used} https://pw.live/watch?v=abc123&bat**\n"
+            "> **/amit https://pw.live/watch?v=abc123&bat**\n"
             "> **or**\n"
-            f"> **/{command_used} https://d1d34p8vz63oiq.cloudfront.net/.../master.mpd?childId=...&parentId=...**"
+            "> **/amit https://d1d34p8vz63oiq.cloudfront.net/.../master.mpd?childId=...&parentId=...**"
         )
         await message.reply_text(example_text)
         return
     
-    # Extract the URL (remove the command part)
-    url = text.replace(f"/{command_used}", "").strip()
-    
     # Check for PW Live link
-    if "pw.live/watch" in url:
+    if "pw.live/watch" in text:
         user_data[user_id] = {
-            "url": url,
+            "url": text.replace("/amit", "").strip(),
             "link_type": "pw_live"
         }
         await message.reply_text(
@@ -173,9 +167,9 @@ async def handle_multi_commands(client: Client, message: Message):
             ])
         )
     # Check for MPD link
-    elif "d1d34p8vz63oiq.cloudfront.net" in url and "master.mpd" in url:
+    elif "d1d34p8vz63oiq.cloudfront.net" in text and "master.mpd" in text:
         user_data[user_id] = {
-            "url": url,
+            "url": text.replace("/amit", "").strip(),
             "link_type": "mpd"
         }
         await message.reply_text(
