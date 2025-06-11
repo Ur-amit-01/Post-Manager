@@ -4,6 +4,8 @@ from pyrogram import Client
 from config import *
 from aiohttp import web
 from plugins.Post.Posting import restore_pending_deletions  # Import your existing function
+from plugins.Post.admin_panel import AdminPanel
+admin_panel = AdminPanel(app)
 
 logging.config.fileConfig('logging.conf')
 logging.getLogger().setLevel(logging.INFO)
