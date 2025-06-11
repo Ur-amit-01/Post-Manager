@@ -62,14 +62,14 @@ def transform_pw_link(url: str, quality: str) -> str:
     
     if not (token := get_token()):
         return "Error: No token found. Please set a token using /token command."
-    
+        
     return (
         f"http://master-api-v3.vercel.app/pw/m3u8v2?"
         f"childId={params.get('scheduleId', [''])[0]}&"
         f"parentId={params.get('batchSlug', [''])[0]}&"
         f"token={token}&q={quality}&authorization=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
-        f".eyJ1c2VyX2lkIjoiZnJlZSB1c2VyICIsInRnX3VzZXJuYW1lIjoiUFVCTElDIFVTRSAiLCJpYXQiOjE3NDY3MzExNzJ9"
-        f".gs1PjfPwzf9ja0OQz7ay7qyysZy-4BDILn-nBbwFAcc"
+        f".eyJ1c2VyX2lkIjoiZnJlZSB1c2VyICIsInRnX3VzZXJuYW1lIjoiUFVCTElDIFVTRSIsImlhdCI6MTc0OTYxOTUzM30"
+        f".oRI_9FotOi3Av9S2Wrr2g6VXUHJEknWVY91-TZ5XdNg"
     )
 
 def transform_mpd_link(url: str, quality: str) -> str:
@@ -85,15 +85,15 @@ def transform_mpd_link(url: str, quality: str) -> str:
     
     if not child_id or not parent_id:
         return "Error: Could not extract required parameters from the MPD link."
-    
     return (
         f"http://master-api-v3.vercel.app/pw/m3u8v2?"
-        f"childId={child_id}&"
-        f"parentId={parent_id}&"
+        f"childId={params.get('scheduleId', [''])[0]}&"
+        f"parentId={params.get('batchSlug', [''])[0]}&"
         f"token={token}&q={quality}&authorization=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
-        f".eyJ1c2VyX2lkIjoiZnJlZSB1c2VyICIsInRnX3VzZXJuYW1lIjoiUFVCTElDIFVTRSAiLCJpYXQiOjE3NDY3MzExNzJ9"
-        f".gs1PjfPwzf9ja0OQz7ay7qyysZy-4BDILn-nBbwFAcc"
+        f".eyJ1c2VyX2lkIjoiZnJlZSB1c2VyICIsInRnX3VzZXJuYW1lIjoiUFVCTElDIFVTRSIsImlhdCI6MTc0OTYxOTUzM30"
+        f".oRI_9FotOi3Av9S2Wrr2g6VXUHJEknWVY91-TZ5XdNg"
     )
+    
 
 @Client.on_message(filters.command("token") & filters.user(config.ADMIN))
 async def set_token(client: Client, message: Message):
