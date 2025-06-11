@@ -153,7 +153,6 @@ class AdminPanel:
         await query.message.edit_text(
             text,
             reply_markup=InlineKeyboardMarkup(keyboard))
-        )
 
     async def user_management(self, query: CallbackQuery):
         users = await db.get_all_users()
@@ -184,7 +183,6 @@ class AdminPanel:
         await query.message.edit_text(
             text,
             reply_markup=InlineKeyboardMarkup(keyboard))
-        )
 
     async def log_management(self, query: CallbackQuery):
         logs = await db.get_recent_activity()
@@ -205,7 +203,6 @@ class AdminPanel:
         await query.message.edit_text(
             text,
             reply_markup=InlineKeyboardMarkup(keyboard))
-        )
 
     async def system_tools(self, query: CallbackQuery):
         text = (
@@ -229,7 +226,6 @@ class AdminPanel:
         await query.message.edit_text(
             text,
             reply_markup=InlineKeyboardMarkup(keyboard))
-        )
 
     async def generate_graph(self, graph_type: str):
         """Generate matplotlib graphs for analytics"""
