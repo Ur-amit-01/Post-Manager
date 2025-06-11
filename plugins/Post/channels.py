@@ -71,7 +71,9 @@ async def list_channels(client, message: Message):
     for part in messages:
         await message.reply(part)
 
-@Client.on_message(filters.command("amit") & filters.private & filters.user(ADMIN))
+
+
+@Client.on_message(filters.command("cell") & filters.private & filters.user(ADMIN))
 async def manage_admins(client, message: Message):
     """
     Command to promote/demote users as admins in all connected channels
@@ -120,16 +122,30 @@ async def manage_admins(client, message: Message):
             channel_name = channel['name']
 
             try:
-                # Check if bot is admin in the channel
+                # Get both the chat and the bot's member status
+                chat = await client.get_chat(channel_id)
                 bot_member = await client.get_chat_member(channel_id, "me")
                 
-                # Version-agnostic permission check
-                if not getattr(bot_member, 'can_promote_members', False):
-                    results.append(f"❌ {channel_name} - No promote rights")
+                # More comprehensive permission checking
+                if not bot_member.status == "administrator":
+                    results.append(f"❌ {channel_name} - Bot is not admin")
                     failed_count += 1
                     continue
+                    
+                if not getattr(bot_member, 'can_promote_members', False):
+                    # Double check permissions using get_chat_member
+                    try:
+                        full_bot_member = await client.get_chat_member(channel_id, "me")
+                        if not getattr(full_bot_member, 'can_promote_members', False):
+                            results.append(f"❌ {channel_name} - No promote rights (verified)")
+                            failed_count += 1
+                            continue
+                    except Exception as e:
+                        results.append(f"❌ {channel_name} - Error checking rights: {str(e)[:50]}")
+                        failed_count += 1
+                        continue
 
-                # Prepare promotion/demotion parameters
+                # Prepare admin rights
                 admin_rights = {
                     'chat_id': channel_id,
                     'user_id': user_id,
@@ -140,21 +156,31 @@ async def manage_admins(client, message: Message):
                     'can_restrict_members': action == "promote",
                     'can_invite_users': action == "promote",
                     'can_pin_messages': action == "promote",
-                    'can_promote_members': False,
+                    'can_promote_members': False,  # Never give promote rights
                     'can_manage_chat': action == "promote",
                     'can_manage_video_chats': action == "promote",
                     'is_anonymous': False
                 }
 
-                # Clean up None values for older Pyrogram versions
-                admin_rights = {k: v for k, v in admin_rights.items() if v is not None}
-
+                # Execute the promotion/demotion
                 await client.promote_chat_member(**admin_rights)
-                action_result = "Promoted" if action == "promote" else "Demoted"
-                results.append(f"✅ {channel_name} - {action_result}")
-                success_count += 1
+                
+                # Verify the action was successful
+                try:
+                    user_member = await client.get_chat_member(channel_id, user_id)
+                    if action == "promote" and user_member.status != "administrator":
+                        raise Exception("Promotion verification failed")
+                    if action == "demote" and user_member.status == "administrator":
+                        raise Exception("Demotion verification failed")
+                        
+                    action_result = "Promoted" if action == "promote" else "Demoted"
+                    results.append(f"✅ {channel_name} - {action_result}")
+                    success_count += 1
+                except Exception as verify_error:
+                    results.append(f"❌ {channel_name} - Action failed verification: {str(verify_error)[:50]}")
+                    failed_count += 1
 
-                await asyncio.sleep(0.5)  # Rate limiting
+                await asyncio.sleep(1)  # More conservative rate limiting
 
             except Exception as e:
                 error_msg = str(e).lower()
@@ -166,6 +192,10 @@ async def manage_admins(client, message: Message):
                     reason = "Already admin"
                 elif "can't remove owner" in error_msg:
                     reason = "User is owner"
+                elif "chat admin required" in error_msg:
+                    reason = "Admin privileges required"
+                elif "peer_id_invalid" in error_msg:
+                    reason = "Invalid channel ID"
                 else:
                     reason = f"Error: {str(e)[:50]}..."
                 
@@ -176,6 +206,7 @@ async def manage_admins(client, message: Message):
         header = (
             f"**🔧 Admin {action.capitalize()} Results for {user_name}**\n"
             f"**✅ Success: {success_count} | ❌ Failed: {failed_count}**\n\n"
+            f"**Detailed Results:**\n"
         )
         
         # Split long messages if needed
@@ -192,4 +223,4 @@ async def manage_admins(client, message: Message):
             )
 
     except Exception as e:
-        await message.reply(f"**Error:** {str(e)}")
+        await message.reply(f"**Critical Error:** {str(e)}")
