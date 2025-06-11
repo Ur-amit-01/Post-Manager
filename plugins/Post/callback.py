@@ -1,11 +1,7 @@
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from plugins.helper.db import db
-from plugins.Post.constants (
-    MAIN_HELP_TXT, POST_HELP_TXT, CHANNEL_HELP_TXT, 
-    DELETE_HELP_TXT, ABOUT_TXT, RESTRICTED_TXT, 
-    REQUEST_TXT, LOG_TEXT
-)
+from plugins.Post.constants import *
 import logging
 
 # Set up logging
