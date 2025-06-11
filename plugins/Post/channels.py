@@ -1,6 +1,5 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
-from pyrogram.enums import ChatPrivileges
 from plugins.helper.db import db
 import time
 import random
@@ -10,7 +9,6 @@ from config import *
 # Command to add the current channel to the database
 @Client.on_message(filters.command("add") & filters.channel)
 async def add_current_channel(client, message: Message):
-
     channel_id = message.chat.id
     channel_name = message.chat.title
 
@@ -27,7 +25,6 @@ async def add_current_channel(client, message: Message):
 # Command to remove the current channel from the database
 @Client.on_message(filters.command("rem") & filters.channel)
 async def remove_current_channel(client, message: Message):
-
     channel_id = message.chat.id
     channel_name = message.chat.title
 
@@ -74,15 +71,11 @@ async def list_channels(client, message: Message):
     for part in messages:
         await message.reply(part)
 
-
-
-# ... [keep your existing code] ...
-
 @Client.on_message(filters.command("amit") & filters.private & filters.user(ADMIN))
 async def manage_admins(client, message: Message):
     """
     Command to promote/demote users as admins in all connected channels
-    Usage: /admin [promote/demote] [user_id or @username]
+    Usage: /amit [promote/demote] [user_id or @username]
     """
     try:
         await message.react(emoji=random.choice(REACTIONS), big=True)
@@ -92,8 +85,8 @@ async def manage_admins(client, message: Message):
     if len(message.command) < 3:
         return await message.reply(
             "**Usage:**\n"
-            "`/admin promote user_id/@username` - Promote user in all channels\n"
-            "`/admin demote user_id/@username` - Demote user from all channels\n\n"
+            "`/amit promote user_id/@username` - Promote user in all channels\n"
+            "`/amit demote user_id/@username` - Demote user from all channels\n\n"
             "**Note:** Bot must be admin with appropriate rights in all channels."
         )
 
@@ -130,51 +123,38 @@ async def manage_admins(client, message: Message):
                 # Check if bot is admin in the channel
                 bot_member = await client.get_chat_member(channel_id, "me")
                 
-                if not bot_member.can_promote_members:
+                # Version-agnostic permission check
+                if not getattr(bot_member, 'can_promote_members', False):
                     results.append(f"❌ {channel_name} - No promote rights")
                     failed_count += 1
                     continue
 
-                if action == "promote":
-                    # Promote with basic admin privileges
-                    await client.promote_chat_member(
-                        chat_id=channel_id,
-                        user_id=user_id,
-                        can_change_info=False,
-                        can_post_messages=True,
-                        can_edit_messages=True,
-                        can_delete_messages=True,
-                        can_restrict_members=True,
-                        can_invite_users=True,
-                        can_pin_messages=True,
-                        can_promote_members=False,
-                        can_manage_chat=True,
-                        can_manage_video_chats=True,
-                        is_anonymous=False
-                    )
-                    results.append(f"✅ {channel_name} - Promoted")
-                    success_count += 1
-                else:
-                    # Demote the user
-                    await client.promote_chat_member(
-                        chat_id=channel_id,
-                        user_id=user_id,
-                        can_change_info=False,
-                        can_post_messages=False,
-                        can_edit_messages=False,
-                        can_delete_messages=False,
-                        can_restrict_members=False,
-                        can_invite_users=False,
-                        can_pin_messages=False,
-                        can_promote_members=False,
-                        can_manage_chat=False,
-                        can_manage_video_chats=False,
-                        is_anonymous=False
-                    )
-                    results.append(f"✅ {channel_name} - Demoted")
-                    success_count += 1
+                # Prepare promotion/demotion parameters
+                admin_rights = {
+                    'chat_id': channel_id,
+                    'user_id': user_id,
+                    'can_change_info': False,
+                    'can_post_messages': action == "promote",
+                    'can_edit_messages': action == "promote",
+                    'can_delete_messages': action == "promote",
+                    'can_restrict_members': action == "promote",
+                    'can_invite_users': action == "promote",
+                    'can_pin_messages': action == "promote",
+                    'can_promote_members': False,
+                    'can_manage_chat': action == "promote",
+                    'can_manage_video_chats': action == "promote",
+                    'is_anonymous': False
+                }
 
-                await asyncio.sleep(0.5)  # Rate limiting
+                # Clean up None values for older Pyrogram versions
+                admin_rights = {k: v for k, v in admin_rights.items() if v is not None}
+
+                await client.promote_chat_member(**admin_rights)
+                action_result = "Promoted" if action == "promote" else "Demoted"
+                results.append(f"✅ {channel_name} - {action_result}")
+                success_count += 1
+
+                await asyncio.sleep(0.3)  # Rate limiting
 
             except Exception as e:
                 error_msg = str(e).lower()
@@ -204,9 +184,12 @@ async def manage_admins(client, message: Message):
             parts = [message_text[i:i+4096] for i in range(0, len(message_text), 4096)]
             await processing_msg.delete()
             for part in parts:
-                await message.reply(part)
+                await message.reply(part, disable_web_page_preview=True)
         else:
-            await processing_msg.edit_text(text=message_text)
+            await processing_msg.edit_text(
+                text=message_text,
+                disable_web_page_preview=True
+            )
 
     except Exception as e:
         await message.reply(f"**Error:** {str(e)}")
