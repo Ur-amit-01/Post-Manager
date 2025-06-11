@@ -78,18 +78,20 @@ async def admin_management(client, message: Message):
         await message.reply(
             "**Admin Management**\n\n"
             "**Usage:**\n"
-            "`/admin promote [user_id/username]` - Promote user in all channels\n"
-            "`/admin demote [user_id/username]` - Demote user from all channels\n"
-            "`/admin check [user_id/username]` - Check user's admin status\n\n"
-            "**Examples:**\n"
-            "`/admin promote @username`\n"
-            "`/admin demote 123456789`"
+            "`/admin promote [user_id/username] [permissions]` - Promote user\n"
+            "`/admin demote [user_id/username]` - Demote user\n\n"
+            "**Permission Flags:**\n"
+            "`post`=Post Messages, `edit`=Edit Messages, `delete`=Delete Messages\n"
+            "`invite`=Invite Users, `pin`=Pin Messages, `info`=Change Info\n\n"
+            "**Example:**\n"
+            "`/admin promote @username post+edit+delete`"
         )
         return
     
     action = message.command[1].lower()
     user_input = message.command[2]
-    
+    permission_flags = message.command[3] if len(message.command) > 3 else ""
+
     try:
         # Resolve user ID
         try:
@@ -101,50 +103,63 @@ async def admin_management(client, message: Message):
         channels = await db.get_all_channels()
         
         if not channels:
-            await message.reply("No channels connected yet.")
+            await message.reply("❌ No channels connected yet.")
             return
         
-        processing_msg = await message.reply(f"⏳ Processing {action} for user {user_id} in {len(channels)} channels...")
+        processing_msg = await message.reply(f"⏳ Processing {action} for user {user_id}...")
         
         success = []
         failed = []
-        
+        details = []
+
         for channel in channels:
             channel_id = channel['_id']
             channel_name = channel['name']
             
             try:
+                # Verify bot's admin status first
+                bot_member = await client.get_chat_member(channel_id, "me")
+                if not bot_member.privileges or not bot_member.privileges.can_promote_members:
+                    failed.append(f"{channel_name} (Bot lacks permissions)")
+                    continue
+
                 if action == "promote":
-                    # Check if user is already admin
-                    try:
-                        member = await client.get_chat_member(channel_id, user_id)
-                        if member.status in [enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]:
-                            failed.append(f"{channel_name} (Already admin)")
-                            continue
-                    except:
-                        pass
-                    
-                    # Promote user
+                    # Parse permission flags
+                    privileges = ChatPrivileges(
+                        can_change_info="info" in permission_flags,
+                        can_post_messages="post" in permission_flags,
+                        can_edit_messages="edit" in permission_flags,
+                        can_delete_messages="delete" in permission_flags,
+                        can_invite_users="invite" in permission_flags,
+                        can_pin_messages="pin" in permission_flags,
+                        can_promote_members=False,  # Never allow this
+                        can_manage_chat=True,  # Basic management
+                        can_manage_video_chats=False  # Not for channels
+                    )
+
+                    # Special handling for channels vs supergroups
+                    chat = await client.get_chat(channel_id)
+                    if chat.type == enums.ChatType.CHANNEL:
+                        # Channels have more restricted permissions
+                        privileges = ChatPrivileges(
+                            can_post_messages="post" in permission_flags,
+                            can_edit_messages="edit" in permission_flags,
+                            can_delete_messages="delete" in permission_flags,
+                            can_invite_users=False,  # Not available in channels
+                            can_pin_messages=False,  # Not available in channels
+                            can_promote_members=False,
+                            can_change_info=False  # Channel-specific restriction
+                        )
+
                     await client.promote_chat_member(
                         chat_id=channel_id,
                         user_id=user_id,
-                        privileges=ChatPrivileges(
-                            can_change_info=True,
-                            can_post_messages=True,
-                            can_edit_messages=True,
-                            can_delete_messages=True,
-                            can_restrict_members=True,
-                            can_invite_users=True,
-                            can_pin_messages=True,
-                            can_promote_members=False,
-                            can_manage_chat=True,
-                            can_manage_video_chats=True
-                        )
+                        privileges=privileges
                     )
                     success.append(channel_name)
-                    
+                    details.append(f"{channel_name}: Granted {permission_flags}")
+
                 elif action == "demote":
-                    # Demote user
                     await client.promote_chat_member(
                         chat_id=channel_id,
                         user_id=user_id,
@@ -153,7 +168,6 @@ async def admin_management(client, message: Message):
                             can_post_messages=False,
                             can_edit_messages=False,
                             can_delete_messages=False,
-                            can_restrict_members=False,
                             can_invite_users=False,
                             can_pin_messages=False,
                             can_promote_members=False,
@@ -162,45 +176,46 @@ async def admin_management(client, message: Message):
                         )
                     )
                     success.append(channel_name)
-                    
-                elif action == "check":
-                    # Check admin status
-                    try:
-                        member = await client.get_chat_member(channel_id, user_id)
-                        status = "Owner" if member.status == enums.ChatMemberStatus.OWNER else (
-                            "Admin" if member.status == enums.ChatMemberStatus.ADMINISTRATOR else "Member"
-                        )
-                        success.append(f"{channel_name}: {status}")
-                    except Exception as e:
-                        failed.append(f"{channel_name}: Error ({str(e)})")
-                    continue
-                
-                else:
-                    await processing_msg.edit_text("Invalid action. Use 'promote', 'demote' or 'check'.")
-                    return
                 
                 await asyncio.sleep(1)  # Rate limiting
                 
             except Exception as e:
-                failed.append(f"{channel_name}: {str(e)}")
+                error = str(e)
+                if "USER_NOT_PARTICIPANT" in error:
+                    failed.append(f"{channel_name} (User not in channel)")
+                elif "ADMIN_RANK_EMOJI_NOT_ALLOWED" in error:
+                    failed.append(f"{channel_name} (Invalid admin title)")
+                elif "RIGHT_FORBIDDEN" in error:
+                    # More detailed forbidden error analysis
+                    chat = await client.get_chat(channel_id)
+                    if chat.type == enums.ChatType.CHANNEL:
+                        failed.append(f"{channel_name} (Channel restrictions apply)")
+                    else:
+                        failed.append(f"{channel_name} (Check bot's admin privileges)")
+                else:
+                    failed.append(f"{channel_name}: {error}")
+
+        # Compile results
+        result_msg = f"**🏁 {action.capitalize()} Results**\n"
+        result_msg += f"• 👤 User: `{user_id}`\n"
+        result_msg += f"• 📊 Channels: {len(channels)}\n"
+        result_msg += f"• ✅ Success: {len(success)}\n"
+        result_msg += f"• ❌ Failed: {len(failed)}\n\n"
         
-        # Prepare result message
-        result_msg = f"**🏁 {action.capitalize()} Results**\n\n"
-        result_msg += f"• User: `{user_id}`\n"
-        result_msg += f"• Total Channels: {len(channels)}\n"
-        result_msg += f"• Successful: {len(success)}\n"
-        result_msg += f"• Failed: {len(failed)}\n\n"
-        
-        if action == "check":
-            result_msg += "**Admin Status:**\n" + "\n".join(success) + "\n\n"
-        else:
+        if success:
             result_msg += "**Successful in:**\n" + "\n".join(success) + "\n\n"
+            if details:
+                result_msg += "**Permissions granted:**\n" + "\n".join(details) + "\n\n"
         
         if failed:
-            result_msg += "**Failed in:**\n" + "\n".join(failed)
-        
+            result_msg += "**Failed in:**\n" + "\n".join(failed) + "\n\n"
+            result_msg += "**Troubleshooting:**\n"
+            result_msg += "- Ensure user is member of each channel\n"
+            result_msg += "- Verify bot has full admin rights\n"
+            result_msg += "- Channels have more restricted permissions\n"
+            result_msg += "- Try with fewer permissions first"
+
         await processing_msg.edit_text(result_msg)
         
     except Exception as e:
-        await message.reply(f"❌ Error: {str(e)}")
-
+        await message.reply(f"❌ Critical Error: {str(e)}")
