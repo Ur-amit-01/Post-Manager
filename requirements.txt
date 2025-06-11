@@ -12,3 +12,5 @@ aiohttp
 pytz
 pyromod
 urllib3==1.26.18
+gunicorn
+flask
