@@ -25,17 +25,23 @@ async def start(client, message: Message):
         f"**Welcome to the Channel Manager Bot, Manage multiple channels and post messages with ease! 😌**\n\n"
         f"> **ᴅᴇᴠᴇʟᴏᴘᴇʀ 🧑🏻‍💻 :- @xDzoddd**"
     )
-    button = InlineKeyboardMarkup([
-        [InlineKeyboardButton('📜 ᴀʙᴏᴜᴛ', callback_data='about'), InlineKeyboardButton('🕵🏻‍♀️ ʜᴇʟᴘ', callback_data='help')]
+    buttons = []
+    if await db.is_admin(message.from_user.id):
+        buttons.append([InlineKeyboardButton("🛠 Admin Panel", callback_data="admin_panel")])
+    
+    buttons.extend([
+        [InlineKeyboardButton('📜 About', callback_data='about')],
+        [InlineKeyboardButton('🕵️ Help', callback_data='help')]
     ])
 
-    # Send the start message with or without a picture
+    reply_markup = InlineKeyboardMarkup(buttons)
+    
     if START_PIC:
-        await message.reply_photo(START_PIC, caption=txt, reply_markup=button)
+        await message.reply_photo(START_PIC, caption=txt, reply_markup=reply_markup)
     else:
-        await message.reply_text(text=txt, reply_markup=button, disable_web_page_preview=True)
+        await message.reply_text(text=txt, reply_markup=reply_markup, disable_web_page_preview=True)
 
-
+        
 @Client.on_message(filters.command("id"))
 async def id_command(client: Client, message: Message):
     if message.chat.title:
