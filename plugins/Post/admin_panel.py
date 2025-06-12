@@ -1,5 +1,5 @@
 
-from helper.database import db
+from plugins.helper.db import db
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from config import *
