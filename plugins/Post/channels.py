@@ -5,6 +5,7 @@ import time
 import random
 import asyncio
 from config import *
+from admin_panel import admin_filter
 
 # Command to add the current channel to the database
 @Client.on_message(filters.command("add") & filters.channel)
