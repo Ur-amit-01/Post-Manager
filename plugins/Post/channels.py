@@ -39,7 +39,7 @@ async def remove_current_channel(client, message: Message):
         await message.reply("❌ Failed to remove channel. Try again.")
 
 # Command to list all connected channels
-@Client.on_message(filters.command("channels") & filters.private & filters.user(ADMIN))
+@Client.on_message(filters.command("channels") & filters.private & admin_filter)
 async def list_channels(client, message: Message):
     try:
         await message.react(emoji=random.choice(REACTIONS), big=True)
