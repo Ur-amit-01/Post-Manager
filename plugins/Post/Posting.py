@@ -6,6 +6,7 @@ import random
 from plugins.helper.time_parser import *
 import asyncio
 from config import *
+from admin_panel import admin_filter
 
 async def restore_pending_deletions(client):
     """Restore pending deletions when bot starts"""
