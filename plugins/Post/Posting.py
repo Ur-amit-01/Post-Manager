@@ -47,7 +47,7 @@ async def restore_pending_deletions(client):
     except Exception as e:
         print(f"Error restoring pending deletions: {e}")
 
-@Client.on_message(filters.command("post") & filters.private & filters.user(ADMIN))
+@Client.on_message(filters.command("post") & filters.private & admin_filter)
 async def send_post(client, message: Message):
     try:
         await message.react(emoji=random.choice(REACTIONS), big=True)
@@ -268,7 +268,7 @@ async def handle_deletion_results(client, deletion_tasks, post_id, delay_seconds
 
 
 
-@Client.on_message(filters.command("fpost") & filters.private & filters.user(ADMIN))
+@Client.on_message(filters.command("fpost") & filters.private & admin_filter)
 async def forward_post(client, message: Message):
     try:
         await message.react(emoji=random.choice(REACTIONS), big=True)
