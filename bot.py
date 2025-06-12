@@ -29,9 +29,6 @@ class Bot(Client):
         self.mention = me.mention
         self.username = me.username
         
-        # Initialize AdminPanel AFTER the client is started
-        self.admin_panel = AdminPanel(self)
-        
         # Restore pending deletions using your existing function
         await restore_pending_deletions(self)
         
