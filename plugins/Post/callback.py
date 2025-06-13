@@ -1,372 +1,168 @@
-from plugins.helper.db import db
 from pyrogram import Client, filters
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
-from config import *
-import os
-import asyncio
-from datetime import datetime, timedelta
-import json
-import time
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from plugins.helper.db import db
+from plugins.Post.constants import *
 import logging
-from pyrogram.errors import FloodWait, InputUserDeactivated, UserIsBlocked, PeerIdInvalid
 
-# Bot start time for uptime calculation
-START_TIME = datetime.now()
-
-# Logging setup
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
-async def admins_only(_, __, message):
-    if not message.from_user:
-        return False
-    return await db.is_admin(message.from_user.id)
+@Client.on_callback_query()
+async def cb_handler(client: Client, query: CallbackQuery):
+    try:
+        data = query.data
+        logger.info(f"Received callback: {data} from {query.from_user.id}")
 
-admin_filter = filters.create(admins_only)
-
-# ==================================== ADMIN PANEL MAIN MENU ====================================
-
-@Client.on_message(filters.command("admin") & admin_filter)
-async def admin_panel(client, message):
-    # Calculate bot uptime
-    uptime = datetime.now() - START_TIME
-    hours, remainder = divmod(int(uptime.total_seconds()), 3600)
-    minutes, seconds = divmod(remainder, 60)
-    days, hours = divmod(hours, 24)
-    uptime_str = f"{days}d {hours}h {minutes}m {seconds}s"
-    
-    # Get stats
-    total_users = await db.total_users_count()
-    total_admins = len(await db.get_all_admins())
-    total_channels = len(await db.get_all_channels())
-    
-    # Create admin panel with buttons
-    text = f"""
-<b>🤖 ADMIN PANEL</b>
-
-📊 <b>Statistics:</b>
-├ 👥 Users: <code>{total_users}</code>
-├ 👑 Admins: <code>{total_admins}</code>
-├ 📢 Channels: <code>{total_channels}</code>
-└ ⏰ Uptime: <code>{uptime_str}</code>
-"""
-    buttons = InlineKeyboardMarkup([
-        [InlineKeyboardButton("👑 Admin Management", callback_data="admin_management")],
-        [InlineKeyboardButton("📢 Broadcast", callback_data="broadcast_menu"),
-         InlineKeyboardButton("📊 Stats", callback_data="stats_menu")],
-        [InlineKeyboardButton("🔰 Backup/Restore", callback_data="backup_menu")]
-    ])
-    
-    await message.reply_text(text, reply_markup=buttons)
-
-# ==================================== ADMIN MANAGEMENT ====================================
-
-@Client.on_callback_query(filters.regex("^admin_management$") & admin_filter)
-async def admin_management(client, query: CallbackQuery):
-    text = """
-<b>👑 ADMIN MANAGEMENT</b>
-
-Manage bot admins with the options below:
-"""
-    buttons = InlineKeyboardMarkup([
-        [InlineKeyboardButton("➕ Promote User", callback_data="promote_user"),
-         InlineKeyboardButton("➖ Demote User", callback_data="demote_user")],
-        [InlineKeyboardButton("📜 List Admins", callback_data="list_admins")],
-        [InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]
-    ])
-    
-    await query.edit_message_text(text, reply_markup=buttons)
-    await query.answer()
-
-@Client.on_callback_query(filters.regex("^promote_user$") & admin_filter)
-async def promote_user_callback(client, query: CallbackQuery):
-    await query.edit_message_text(
-        "To promote a user:\n\n"
-        "1. Reply to their message with <code>/promote</code>\n"
-        "OR\n"
-        "2. Use <code>/promote user_id</code>",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔙 Back", callback_data="admin_management")]
-        ])
-    )
-    await query.answer()
-
-@Client.on_callback_query(filters.regex("^demote_user$") & admin_filter)
-async def demote_user_callback(client, query: CallbackQuery):
-    await query.edit_message_text(
-        "To demote a user:\n\n"
-        "1. Reply to their message with <code>/demote</code>\n"
-        "OR\n"
-        "2. Use <code>/demote user_id</code>",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔙 Back", callback_data="admin_management")]
-        ])
-    )
-    await query.answer()
-
-@Client.on_callback_query(filters.regex("^list_admins$") & admin_filter)
-async def list_admins_callback(client, query: CallbackQuery):
-    admins = await db.get_all_admins()
-    if not admins:
-        text = "No admins found!"
-    else:
-        text = "👑 <b>Admin List</b>\n\n"
-        for admin in admins:
-            try:
-                user = await client.get_users(admin["_id"])
-                text += f"• {user.mention} (<code>{user.id}</code>)\n"
-                text += f"  ⏰ Added: <code>{admin.get('added_at', 'Unknown')}</code>\n\n"
-            except:
-                text += f"• Unknown User (<code>{admin['_id']}</code>)\n\n"
-    
-    await query.edit_message_text(
-        text,
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔙 Back", callback_data="admin_management")]
-        ])
-    )
-    await query.answer()
-
-# ==================================== BROADCAST MENU ====================================
-
-@Client.on_callback_query(filters.regex("^broadcast_menu$") & admin_filter)
-async def broadcast_menu(client, query: CallbackQuery):
-    total_users = await db.total_users_count()
-    text = f"""
-<b>📢 BROADCAST MESSAGE</b>
-
-Current subscribers: <code>{total_users}</code>
-
-To send a broadcast:
-1. Reply to any message with <code>/broadcast</code>
-"""
-    buttons = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]
-    ])
-    
-    await query.edit_message_text(text, reply_markup=buttons)
-    await query.answer()
-
-# ==================================== STATS MENU ====================================
-
-@Client.on_callback_query(filters.regex("^stats_menu$") & admin_filter)
-async def stats_menu(client, query: CallbackQuery):
-    # Calculate bot uptime
-    uptime = datetime.now() - START_TIME
-    hours, remainder = divmod(int(uptime.total_seconds()), 3600)
-    minutes, seconds = divmod(remainder, 60)
-    days, hours = divmod(hours, 24)
-    uptime_str = f"{days}d {hours}h {minutes}m {seconds}s"
-    
-    # Get stats
-    total_users = await db.total_users_count()
-    total_admins = len(await db.get_all_admins())
-    total_channels = len(await db.get_all_channels())
-    
-    text = f"""
-<b>📊 BOT STATISTICS</b>
-
-👥 <b>Total Users:</b> <code>{total_users}</code>
-👑 <b>Total Admins:</b> <code>{total_admins}</code>
-📢 <b>Total Channels:</b> <code>{total_channels}</code>
-⏰ <b>Uptime:</b> <code>{uptime_str}</code>
-"""
-    buttons = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔄 Refresh", callback_data="stats_menu"),
-         InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]
-    ])
-    
-    await query.edit_message_text(text, reply_markup=buttons)
-    await query.answer()
-
-# ==================================== BACKUP/RESTORE MENU ====================================
-
-@Client.on_callback_query(filters.regex("^backup_menu$") & admin_filter)
-async def backup_menu(client, query: CallbackQuery):
-    text = """
-<b>🔰 BACKUP & RESTORE</b>
-
-• <b>Backup:</b> Creates a JSON file with channels and admins data
-• <b>Restore:</b> Restores data from a backup file
-
-Commands:
-• <code>/backup</code> - Create a backup
-• <code>/restore</code> (reply to backup file) - Restore data
-"""
-    buttons = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]
-    ])
-    
-    await query.edit_message_text(text, reply_markup=buttons)
-    await query.answer()
-
-# ==================================== BACK BUTTON ====================================
-
-@Client.on_callback_query(filters.regex("^back_to_main$") & admin_filter)
-async def back_to_main(client, query: CallbackQuery):
-    # Reuse the admin_panel function to return to main menu
-    await admin_panel(client, query.message)
-    await query.answer()
-
-# ==================================== ORIGINAL COMMANDS (KEPT FOR COMPATIBILITY) ====================================
-
-@Client.on_message(filters.command("promote") & filters.user(ADMIN))
-async def promote_user(client, message):
-    if not message.reply_to_message and len(message.command) < 2:
-        return await message.reply("Reply to a user or use: /promote user_id")
-    
-    if message.reply_to_message:
-        user_id = message.reply_to_message.from_user.id
-    else:
-        try:
-            user_id = int(message.command[1])
-        except:
-            return await message.reply("Invalid user ID!")
-
-    await db.add_admin(user_id)
-    await message.reply(f"✅ Promoted user {user_id} to admin!")
-
-@Client.on_message(filters.command("demote") & filters.user(ADMIN))
-async def demote_user(client, message):
-    if not message.reply_to_message and len(message.command) < 2:
-        return await message.reply("Reply to a user or use: /demote user_id")
-    
-    if message.reply_to_message:
-        user_id = message.reply_to_message.from_user.id
-    else:
-        try:
-            user_id = int(message.command[1])
-        except:
-            return await message.reply("Invalid user ID!")
-
-    await db.remove_admin(user_id)
-    await message.reply(f"❌ Demoted user {user_id}")
-
-@Client.on_message(filters.command("broadcast") & filters.user(ADMIN) & filters.reply)
-async def broadcast_handler(bot: Client, m: Message):
-    all_users = await db.get_all_users()
-    broadcast_msg = m.reply_to_message
-    sts_msg = await m.reply_text("📢 <b>Broadcast started!</b>")
-    
-    done, failed, success = 0, 0, 0
-    start_time = time.time()
-    total_users = await db.total_users_count()
-
-    async for user in all_users:
-        sts = await send_msg(bot, user['_id'], broadcast_msg)
-        if sts == 200:
-            success += 1
+        if data.startswith("admin_"):
+            return
+        
+        # Delete post handler
+        if data.startswith("delete_"):
+            await handle_delete_post(client, query)
+            return
+            
+        # Start menu
+        elif data == "start":
+            txt = f"> **✨👋🏻 Hey {query.from_user.mention} !!**\n" \
+                  f"**Welcome to the Channel Manager Bot, Manage multiple channels and post messages with ease! 😌**\n\n" \
+                  f"> **ᴅᴇᴠᴇʟᴏᴘᴇʀ 🧑🏻‍💻 :- @Axa_bachha**"
+            
+            reply_markup = InlineKeyboardMarkup([
+                [InlineKeyboardButton('📜 ᴀʙᴏᴜᴛ', callback_data='about'),
+                 InlineKeyboardButton('🕵🏻‍♀️ ʜᴇʟᴘ', callback_data='help')]
+            ])
+        
+        # Main help menu
+        elif data == "help":
+            txt = MAIN_HELP_TXT
+            reply_markup = InlineKeyboardMarkup([
+                [InlineKeyboardButton("ʀᴇǫᴜᴇsᴛ ᴀᴄᴄᴇᴘᴛᴏʀ", callback_data="request")],
+                [InlineKeyboardButton("ʀᴇsᴛʀɪᴄᴛᴇᴅ ᴄᴏɴᴛᴇɴᴛ sᴀᴠᴇʀ", callback_data="restricted")],
+                [InlineKeyboardButton("📢 Post Help", callback_data="post_help"),
+                 InlineKeyboardButton("📋 Channel Help", callback_data="channel_help")],
+                [InlineKeyboardButton("🗑 Delete Help", callback_data="delete_help"),
+                 InlineKeyboardButton("🏠 Home", callback_data="start")]
+            ])
+        
+        # Help sub-menus
+        elif data == "post_help":
+            txt = POST_HELP_TXT
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Back", callback_data="help")]])
+        
+        elif data == "channel_help":
+            txt = CHANNEL_HELP_TXT
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Back", callback_data="help")]])
+        
+        elif data == "delete_help":
+            txt = DELETE_HELP_TXT
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Back", callback_data="help")]])
+        
+        # Other menus
+        elif data == "about":
+            txt = ABOUT_TXT.format(client.mention)
+            reply_markup = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🤖 ᴅᴇᴠᴇʟᴏᴘᴇʀ", url="https://t.me/axa_bachha"),
+                 InlineKeyboardButton("🏠 Home", callback_data="start")]
+            ])
+        
+        elif data == "restricted":
+            txt = RESTRICTED_TXT
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Back", callback_data="help")]])
+        
+        elif data == "request":
+            txt = REQUEST_TXT.format(client.mention)
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Back", callback_data="help")]])
+        
         else:
-            failed += 1
-        if sts == 400:
-            await db.delete_user(user['_id'])
+            await query.answer("⚠️ Unknown command", show_alert=True)
+            return
+        
+        await query.message.edit_text(
+            text=txt,
+            reply_markup=reply_markup,
+            disable_web_page_preview=True
+        )
+        await query.answer()
+        
+    except Exception as e:
+        logger.error(f"Error in callback handler: {e}", exc_info=True)
+        await query.answer(f"Error: {str(e)}", show_alert=True)
 
-        done += 1
-        if not done % 20:
-            await sts_msg.edit(
-                f"📊 <b>Broadcast Progress:</b>\n\n"
-                f"👥 Total Users: <code>{total_users}</code>\n"
-                f"✅ Completed: <code>{done}</code> / <code>{total_users}</code>\n"
-                f"✔️ Success: <code>{success}</code>\n"
-                f"❌ Failed: <code>{failed}</code>"
+async def handle_delete_post(client: Client, query: CallbackQuery):
+    try:
+        await query.answer("Processing deletion...")
+        post_id = int(query.data.split("_")[1])
+        
+        # Retrieve the post's details from the database
+        post = await db.get_post(post_id)
+        
+        if not post:
+            await query.answer("❌ Post not found or already deleted", show_alert=True)
+            await query.message.edit_text(
+                f"❌ <b>Deletion Failed</b>\n\n"
+                f"• <b>Post ID:</b> <code>{post_id}</code>\n"
+                f"• <b>Reason:</b> Post not found in database"
             )
+            return
 
-    completed_in = timedelta(seconds=int(time.time() - start_time))
-    await sts_msg.edit(
-        f"✅ <b>Broadcast Completed!</b>\n\n"
-        f"⏱️ Time taken: <code>{completed_in}</code>\n"
-        f"👥 Total Users: <code>{total_users}</code>\n"
-        f"✅ Completed: <code>{done}</code> / <code>{total_users}</code>\n"
-        f"✔️ Success: <code>{success}</code>\n"
-        f"❌ Failed: <code>{failed}</code>"
-    )
-
-async def send_msg(bot, user_id, message):
-    try:
-        await message.copy(chat_id=int(user_id))
-        return 200
-    except FloodWait as e:
-        await asyncio.sleep(e.value)
-        return await send_msg(bot, user_id, message)
-    except InputUserDeactivated:
-        logger.info(f"{user_id} : deactivated")
-        return 400
-    except UserIsBlocked:
-        logger.info(f"{user_id} : blocked the bot")
-        return 400
-    except PeerIdInvalid:
-        logger.info(f"{user_id} : user id invalid")
-        return 400
-    except Exception as e:
-        logger.error(f"{user_id} : {e}")
-        return 500
-
-@Client.on_message(filters.command("backup") & admin_filter)
-async def backup_data(client, message):
-    try:        
-        channels = [{"_id": c["_id"], "name": c.get("name")} for c in await db.get_all_channels()]
-        admins = [{"_id": a["_id"]} for a in await db.get_all_admins()]
-        
-        backup = {
-            "channels": channels,
-            "admins": admins,
-            "backup_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
-        
-        me = await client.get_me()
-        filename = f"{me.username}_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        with open(filename, "w") as f:
-            json.dump(backup, f, indent=4)
-        
-        await client.send_document(
-            message.chat.id, 
-            filename, 
-            caption=f"📦 <b>Backup File</b>\n\n"
-                    f"📅 <b>Date:</b> <code>{backup['backup_date']}</code>\n"
-                    f"📢 <b>Channels:</b> <code>{len(backup['channels']}</code>\n"
-                    f"👑 <b>Admins:</b> <code>{len(backup['admins'])}</code>"
+        processing_msg = await query.message.edit_text(
+            f"🗑 <b>Deleting Post ID:</b> <code>{post_id}</code>\n\n"
+            f"• <b>Channels: {len(post.get('channels', []))}</b>\n"
+            f"⏳ <b><i>Processing deletion...</i></b>"
         )
-        os.remove(filename)
-        await message.reply("✅ <b>Backup completed successfully!</b>")
-        
-    except Exception as e:
-        await message.reply(f"❌ <b>Backup failed:</b> <code>{str(e)}</code>")
-        if 'filename' in locals() and os.path.exists(filename):
-            os.remove(filename)
 
-@Client.on_message(filters.command("restore") & admin_filter)
-async def restore_data(client, message):
-    if not message.reply_to_message or not message.reply_to_message.document:
-        return await message.reply("⚠️ <b>Please reply to a backup file</b>")
-    
-    try:
-        msg = await message.reply("🔄 <b>Restoring data...</b>")
-        file = await message.reply_to_message.download()
-        
-        with open(file, "r") as f:
-            backup = json.load(f)
-        
-        # Restore channels
-        channels_count = 0
-        for channel in backup.get("channels", []):
-            await db.add_channel(channel["_id"], channel.get("name"))
-            channels_count += 1
-        
-        # Restore admins
-        admins_count = 0
-        for admin in backup.get("admins", []):
-            await db.add_admin(admin["_id"])
-            admins_count += 1
-        
-        os.remove(file)
-        await msg.edit(
-            f"✅ <b>Restore completed successfully!</b>\n\n"
-            f"📢 <b>Channels restored:</b> <code>{channels_count}</code>\n"
-            f"👑 <b>Admins restored:</b> <code>{admins_count}</code>\n"
-            f"📅 <b>Backup date:</b> <code>{backup.get('backup_date', 'Unknown')}</code>"
+        channels = post.get("channels", [])
+        success_count = 0
+        failed_count = 0
+        failed_channels = []
+
+        for channel in channels:
+            try:
+                await client.delete_messages(
+                    chat_id=channel["channel_id"],
+                    message_ids=channel["message_id"]
+                )
+                success_count += 1
+                # Remove from database after successful deletion
+                await db.remove_channel_post(post_id, channel["channel_id"])
+            except Exception as e:
+                failed_count += 1
+                failed_channels.append(
+                    f"  - {channel.get('channel_name', channel['channel_id'])}: {str(e)}"
+                )
+
+        # Check if all channels were deleted
+        remaining_channels = await db.get_post_channels(post_id)
+        if not remaining_channels:
+            await db.delete_post(post_id)
+
+        result_msg = (
+            f"🗑 <b>Post Deletion Results</b>\n\n"
+            f"• <b>Post ID:</b> <code>{post_id}</code>\n"
+            f"• <b>Successfully deleted from:</b> {success_count} channel(s)\n"
         )
         
+        if failed_count > 0:
+            result_msg += (
+                f"• <b>Failed to delete from:</b> {failed_count} channel(s)\n"
+                f"\n<b>Errors:</b>\n"
+            )
+            # Show up to 5 error messages to avoid too long messages
+            result_msg += "\n".join(failed_channels[:5])
+            if len(failed_channels) > 5:
+                result_msg += f"\n  - (and {len(failed_channels)-5} more errors...)"
+
+        await processing_msg.edit_text(result_msg)
+
     except Exception as e:
-        await message.reply(f"❌ <b>Restore failed:</b> <code>{str(e)}</code>")
-        if 'file' in locals() and os.path.exists(file):
-            os.remove(file)
+        logger.error(f"Error in delete handler: {e}", exc_info=True)
+        await query.answer("❌ An error occurred during deletion", show_alert=True)
+        await query.message.edit_text(
+            f"❌ <b>Deletion Failed</b>\n\n"
+            f"• <b>Error:</b> {str(e)}\n"
+            f"• Please try again or check logs"
+        )
