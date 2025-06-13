@@ -7,6 +7,7 @@ import math
 import os
 import shutil
 import subprocess
+import json
 
 
 class Database:
@@ -195,45 +196,70 @@ class Database:
 
     # ============ admin panel Methods ============
 
+    # ============ Backup/Restore System ============ #
     async def create_backup(self):
-        """Create a manual backup of the database"""
+        """Create a JSON backup of the database"""
         try:
             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             backup_dir = "backups"
             os.makedirs(backup_dir, exist_ok=True)
-            backup_file = f"{backup_dir}/backup_{timestamp}.gz"
+            backup_file = f"{backup_dir}/backup_{timestamp}.json"
             
-            # Create mongodump command
-            cmd = [
-                "mongodump",
-                "--uri", DB_URL,
-                "--archive=" + backup_file,
-                "--gzip"
-            ]
+            # Get all collections to backup
+            collections = await self.db.list_collection_names()
+            backup_data = {}
             
-            # Execute backup
-            subprocess.run(cmd, check=True)
+            for collection_name in collections:
+                collection = self.db[collection_name]
+                backup_data[collection_name] = [
+                    doc async for doc in collection.find({})
+                ]
+            
+            # Save to JSON file with proper formatting
+            with open(backup_file, 'w', encoding='utf-8') as f:
+                json.dump(backup_data, f, indent=4, default=str)
+            
             return backup_file
+            
         except Exception as e:
-            await self.log_error(f"Backup failed: {str(e)}")
+            error_msg = f"Backup creation error: {str(e)}"
+            await self.log_error(error_msg)
+            print(error_msg)
             return None
 
     async def restore_backup(self, backup_file: str):
-        """Restore database from backup file"""
+        """Restore database from JSON backup"""
         try:
             if not os.path.exists(backup_file):
                 return False, "Backup file not found"
             
-            cmd = [
-                "mongorestore",
-                "--uri", DB_URL,
-                "--archive=" + backup_file,
-                "--gzip",
-                "--drop"
-            ]
+            # Read backup file
+            with open(backup_file, 'r', encoding='utf-8') as f:
+                backup_data = json.load(f)
             
-            subprocess.run(cmd, check=True)
+            # Restore each collection
+            for collection_name, documents in backup_data.items():
+                collection = self.db[collection_name]
+                
+                # Clear existing data
+                await collection.delete_many({})
+                
+                # Insert documents in batches
+                batch_size = 100
+                for i in range(0, len(documents), batch_size):
+                    batch = documents[i:i + batch_size]
+                    try:
+                        await collection.insert_many(batch)
+                    except Exception as e:
+                        await self.log_error(
+                            f"Error restoring {collection_name} batch {i}: {str(e)}"
+                        )
+                        continue
+            
             return True, "Database restored successfully"
+            
+        except json.JSONDecodeError as e:
+            return False, f"Invalid backup file format: {str(e)}"
         except Exception as e:
             return False, f"Restore failed: {str(e)}"
 
@@ -250,6 +276,38 @@ class Database:
         except Exception as e:
             await self.log_error(f"Auto backup failed: {str(e)}")
             return None
+
+    async def cleanup_old_backups(self, days_to_keep=30):
+        """Remove backup files older than specified days"""
+        try:
+            backup_dir = "backups"
+            if not os.path.exists(backup_dir):
+                return 0
+                
+            cutoff = time.time() - (days_to_keep * 86400)
+            removed = 0
+            
+            for filename in os.listdir(backup_dir):
+                filepath = os.path.join(backup_dir, filename)
+                if os.path.getmtime(filepath) < cutoff:
+                    os.remove(filepath)
+                    removed += 1
+                    
+            return removed
+        except Exception as e:
+            await self.log_error(f"Backup cleanup error: {str(e)}")
+            return 0
+
+    # ============ Utility Methods ============ #
+    async def log_error(self, error_message: str):
+        """Log errors to database"""
+        try:
+            await self.logs.insert_one({
+                "error": error_message,
+                "timestamp": datetime.now()
+            })
+        except Exception as e:
+            print(f"Failed to log error: {e}")
             
 # Initialize the database
 db = Database(DB_URL, DB_NAME)
