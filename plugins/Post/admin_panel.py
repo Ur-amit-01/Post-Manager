@@ -198,7 +198,7 @@ async def backup_menu(client, query: CallbackQuery):
 @Client.on_message(filters.command("promote") & filters.user(ADMIN))
 async def promote_user(client, message):
     if not message.reply_to_message and len(message.command) < 2:
-        return await message.reply("Reply to a user or use: /promote user_id")
+        return await message.reply("**Reply to a user or use: /promote user_id**")
     
     if message.reply_to_message:
         user_id = message.reply_to_message.from_user.id
@@ -237,11 +237,11 @@ async def backup_data(client, message):
         backup = {
             "channels": channels,
             "admins": admins,
-            "backup_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            "backup_date": datetime.now().strftime("%d-%m-%Y")
         }
         
         me = await client.get_me()
-        filename = f"{me.username}_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        filename = f"{me.username}_backup.json"
         with open(filename, "w") as f:
             json.dump(backup, f, indent=4)
         
