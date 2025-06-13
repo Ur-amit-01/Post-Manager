@@ -74,32 +74,64 @@ async def list_admins(client, message):
 @Client.on_message(filters.command("backup") & filters.user(ADMIN))
 async def manual_backup(client, message):
     """Create and send manual backup"""
-    msg = await message.reply("🔄 Creating database backup...")
-    backup_file = await db.create_backup()
-    
-    if backup_file:
+    try:
+        # Send initial message
+        progress_msg = await message.reply("**🔄 Creating database backup...**")
+        
+        # Create backup
+        backup_file = await db.create_backup()
+        
+        if not backup_file or not os.path.exists(backup_file):
+            await progress_msg.edit_text("❌ Backup creation failed!")
+            return
+            
+        # Edit message to show we're now sending
+        await progress_msg.edit_text("📤 Uploading backup file...")
+        
         try:
-            # Send to owner
-            await client.send_document(
+            # Send to owner with progress tracking
+            sent_msg = await client.send_document(
                 chat_id=OWNER_ID,
                 document=backup_file,
-                caption=f"📦 Database Backup\n{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                caption=f"📦 Database Backup\n{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                progress=progress_callback,
+                progress_args=(progress_msg, "Owner")
             )
             
             # Send to log channel
             await client.send_document(
                 chat_id=LOG_CHANNEL,
                 document=backup_file,
-                caption="🔐 Database Backup"
+                caption="🔐 Database Backup",
+                progress=progress_callback,
+                progress_args=(progress_msg, "Log Channel")
             )
             
-            await msg.edit_text("✅ Backup created and sent successfully!")
-        except Exception as e:
-            await msg.edit_text(f"❌ Failed to send backup: {str(e)}")
+            await progress_msg.edit_text("✅ Backup created and sent successfully!")
+            
+        except Exception as send_error:
+            await progress_msg.edit_text(f"❌ Failed to send backup: {str(send_error)}")
+            
         finally:
-            os.remove(backup_file)
-    else:
-        await msg.edit_text("❌ Backup creation failed!")
+            # Clean up backup file
+            if os.path.exists(backup_file):
+                os.remove(backup_file)
+                
+    except Exception as e:
+        error_msg = f"Backup process error: {str(e)}"
+        print(error_msg)
+        await message.reply(error_msg)
+
+async def progress_callback(current, total, message, target):
+    """Update progress during file upload"""
+    percent = (current / total) * 100
+    try:
+        await message.edit_text(
+            f"📤 Uploading to {target}: {current}/{total} bytes "
+            f"({percent:.1f}%)"
+        )
+    except:
+        pass  
 
 @Client.on_message(filters.command("import") & filters.user(ADMIN))
 async def restore_database(client, message):
