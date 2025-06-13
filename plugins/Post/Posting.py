@@ -54,11 +54,14 @@ async def send_post(client, message: Message):
         await message.react(emoji=random.choice(REACTIONS), big=True)
     except:
         pass
+    if not await db.is_admin(message.from_user.id):
+        await message.reply("**❌ You are not authorized to use this command!**")
+        return
     
     if not message.reply_to_message:
         await message.reply("**Reply to a message to post it.**")
-        return
-
+	    return
+    
     delete_after = None
     time_input = None
     if len(message.command) > 1:
