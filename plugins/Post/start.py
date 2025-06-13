@@ -1,9 +1,8 @@
 from pyrogram import Client, filters
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from config import *
 from plugins.helper.db import db
 import random
-from asyncio import sleep
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery, Message, BotCommand
 # =====================================================================================
 
 @Client.on_message(filters.private & filters.command("start"))
@@ -21,27 +20,21 @@ async def start(client, message: Message):
 
     # Welcome message
     txt = (
-        f"> **✨👋🏻 Hey {message.from_user.mention} !!**\n\n"
+        f"> **✨👋🏻 Hey {message.from_user.mention} !!**\n"
         f"**Welcome to the Channel Manager Bot, Manage multiple channels and post messages with ease! 😌**\n\n"
         f"> **ᴅᴇᴠᴇʟᴏᴘᴇʀ 🧑🏻‍💻 :- @xDzoddd**"
     )
-    buttons = []
-    if await db.is_admin(message.from_user.id):
-        buttons.append([InlineKeyboardButton("🛠 Admin Panel", callback_data="admin_panel")])
-    
-    buttons.extend([
-        [InlineKeyboardButton('📜 About', callback_data='about')],
-        [InlineKeyboardButton('🕵️ Help', callback_data='help')]
+    button = InlineKeyboardMarkup([
+        [InlineKeyboardButton('📜 ᴀʙᴏᴜᴛ', callback_data='about'), InlineKeyboardButton('🕵🏻‍♀️ ʜᴇʟᴘ', callback_data='help')]
     ])
 
-    reply_markup = InlineKeyboardMarkup(buttons)
-    
+    # Send the start message with or without a picture
     if START_PIC:
-        await message.reply_photo(START_PIC, caption=txt, reply_markup=reply_markup)
+        await message.reply_photo(START_PIC, caption=txt, reply_markup=button)
     else:
-        await message.reply_text(text=txt, reply_markup=reply_markup, disable_web_page_preview=True)
+        await message.reply_text(text=txt, reply_markup=button, disable_web_page_preview=True)
 
-        
+
 @Client.on_message(filters.command("id"))
 async def id_command(client: Client, message: Message):
     if message.chat.title:
@@ -56,7 +49,6 @@ async def id_command(client: Client, message: Message):
         text=id_text,
         reply_to_message_id=message.id,
     )
-
 # =====================================================================================
 # Set bot commands
 @Client.on_message(filters.command("set") & filters.user(ADMIN))
