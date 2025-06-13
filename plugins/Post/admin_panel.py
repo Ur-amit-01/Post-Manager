@@ -136,7 +136,7 @@ async def send_msg(bot, user_id, message):
         return 500
 
 #======================================== BACKUP/RESTORE ================================================
-@Client.on_message(filters.command("backup") & admin_filter)
+@Client.on_message(filters.command(["backup", "export"]) & admin_filter)
 async def backup_data(client, message):
     """Simple backup of channels and admins to JSON"""
     try:        
@@ -167,7 +167,7 @@ async def backup_data(client, message):
             os.remove(filename)
 		
 
-@Client.on_message(filters.command("restore") & admin_filter)
+@Client.on_message(filters.command(["restore", "import"]) & admin_filter)
 async def restore_data(client, message):
     """Restore channels and admins from JSON backup"""
     if not message.reply_to_message or not message.reply_to_message.document:
