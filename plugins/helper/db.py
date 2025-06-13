@@ -12,7 +12,7 @@ class Database:
         self.col = self.db.user
         self.channels = self.db.channels
         self.formatting = self.db.formatting
-        self.admins = self.db.admins
+        self.admins = self.db.admins  # Dedicated admin collection
         self.posts = self.db.posts
         self.settings = self.db.settings
         self.logs = self.db.logs
@@ -27,8 +27,6 @@ class Database:
             suffix=None,
             metadata=False,
             metadata_code="By :- @Madflix_Bots",
-            is_admin=False,
-            is_banned=False,
             join_date=datetime.now(),
             last_active=datetime.now()
         )
@@ -51,16 +49,48 @@ class Database:
     async def delete_user(self, user_id):
         await self.col.delete_many({'_id': int(user_id)})
 
-    async def set_admin(self, user_id: int, is_admin: bool = True):
-        await self.col.update_one(
-            {'_id': int(user_id)},
-            {'$set': {'is_admin': is_admin}}
+    # ============ Admin System ============ #
+    async def add_admin(self, user_id: int, admin_data: Optional[Dict] = None):
+        """Add or update an admin with additional metadata"""
+        admin_data = admin_data or {}
+        admin_data.update({
+            "_id": user_id,
+            "is_admin": True,
+            "added_at": datetime.now(),
+            "last_active": datetime.now()
+        })
+        await self.admins.update_one(
+            {"_id": user_id},
+            {"$set": admin_data},
+            upsert=True
         )
 
-    async def ban_user(self, user_id: int, is_banned: bool = True):
-        await self.col.update_one(
-            {'_id': int(user_id)},
-            {'$set': {'is_banned': is_banned}}
+    async def remove_admin(self, user_id: int):
+        """Remove admin privileges"""
+        await self.admins.delete_one({"_id": user_id})
+
+    async def is_admin(self, user_id: int) -> bool:
+        """Check if user is admin with proper error handling"""
+        try:
+            admin = await self.admins.find_one({"_id": user_id})
+            return admin is not None and admin.get("is_admin", False)
+        except Exception as e:
+            await self.log_error(f"Admin check error for {user_id}: {e}")
+            return False
+
+    async def get_admin(self, user_id: int) -> Optional[Dict]:
+        """Get full admin data"""
+        return await self.admins.find_one({"_id": user_id})
+
+    async def get_all_admins(self) -> List[Dict]:
+        """List all admins with their details"""
+        return [admin async for admin in self.admins.find({"is_admin": True})]
+
+    async def update_admin_activity(self, user_id: int):
+        """Update admin's last active time"""
+        await self.admins.update_one(
+            {"_id": user_id},
+            {"$set": {"last_active": datetime.now()}}
         )
 
     # ============ Channel System ============ #
@@ -159,24 +189,7 @@ class Database:
             await self.log_error(f"Error retrieving posts: {e}")
             return []
 
-    # ============ Admin Panel Methods ============ #
-    async def add_admin(self, user_id: int):
-        """Add a single-level admin"""
-        await self.admins.update_one(
-            {"_id": user_id},
-            {"$set": {"is_admin": True}},
-            upsert=True
-        )
-
-    async def remove_admin(self, user_id: int):
-        """Remove admin"""
-        await self.admins.delete_one({"_id": user_id})
-
-    async def is_admin(self, user_id: int):
-        """Check if user is admin"""
-        admin = await self.admins.find_one({"_id": user_id})
-        return bool(admin)
-
+    # ============ Utility Methods ============ #
     async def log_error(self, error_message: str):
         """Log errors to database"""
         try:
@@ -186,6 +199,14 @@ class Database:
             })
         except Exception as e:
             print(f"Failed to log error: {e}")
+
+    async def cleanup_inactive_admins(self, days_inactive=30):
+        """Remove admins inactive for specified days"""
+        cutoff_date = datetime.now() - timedelta(days=days_inactive)
+        result = await self.admins.delete_many({
+            "last_active": {"$lt": cutoff_date}
+        })
+        return result.deleted_count
 
 # Initialize the database
 db = Database(DB_URL, DB_NAME)
