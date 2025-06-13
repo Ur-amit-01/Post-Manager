@@ -46,7 +46,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
             
             reply_markup = InlineKeyboardMarkup([
                 [InlineKeyboardButton('📜 ᴀʙᴏᴜᴛ', callback_data='about'),
-                 InlineKeyboardButton('🕵🏻‍♀️ ʜᴇʟᴘ', callback_data='help')]
+                 InlineKeyboardButton('🕵🏻‍♀️ ʜᴇʟᴘ', callback_data='help')],
+                [InlineKeyboardButton("⚙️ ᴀᴅᴍɪɴ ᴘᴀɴᴇʟ 🛠️", callback_data="back_to_main")]
             ])
         
         # Main help menu
