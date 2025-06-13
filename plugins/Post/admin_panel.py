@@ -1,33 +1,22 @@
+from plugins.helper.db import db
 from pyrogram import Client, filters
-from pyrogram.types import (
-    Message, 
-    InlineKeyboardMarkup, 
-    InlineKeyboardButton, 
-    CallbackQuery
-)
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from config import *
 import os
 import asyncio
+from datetime import datetime, timedelta
 import json
 import time
 import logging
-import psutil
-from datetime import datetime, timedelta
-from plugins.helper.db import db
-from pyrogram.errors import (
-    FloodWait, 
-    InputUserDeactivated, 
-    UserIsBlocked, 
-    PeerIdInvalid
-)
+from pyrogram.errors import FloodWait, InputUserDeactivated, UserIsBlocked, PeerIdInvalid
 
-# ======================== INITIALIZATION ========================
+# Bot start time for uptime calculation
+START_TIME = datetime.now()
+
+# Logging setup
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-BOT_START_TIME = time.time()
-
-# ======================== UTILITIES ========================
 async def admins_only(_, __, message):
     if not message.from_user:
         return False
@@ -35,357 +24,350 @@ async def admins_only(_, __, message):
 
 admin_filter = filters.create(admins_only)
 
-def format_time(seconds: int) -> str:
-    """Convert seconds to human-readable time format"""
-    periods = [
-        ('day', 86400),
-        ('hour', 3600),
-        ('minute', 60),
-        ('second', 1)
-    ]
-    parts = []
-    for period_name, period_seconds in periods:
-        if seconds >= period_seconds:
-            period_value, seconds = divmod(seconds, period_seconds)
-            parts.append(f"{period_value} {period_name}{'s' if period_value != 1 else ''}")
-    return ", ".join(parts[:3])
+# ==================================== ADMIN PANEL MAIN MENU ====================================
 
-async def generate_admin_menu():
-    """Generate the main admin menu"""
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("👑 User Management", callback_data="admin_user_mgmt"),
-            InlineKeyboardButton("📢 Broadcast", callback_data="admin_broadcast")
-        ],
-        [
-            InlineKeyboardButton("📊 Statistics", callback_data="admin_stats"),
-            InlineKeyboardButton("💾 Backup", callback_data="admin_backup")
-        ],
-        [
-            InlineKeyboardButton("⚙️ Settings", callback_data="admin_settings"),
-            InlineKeyboardButton("❌ Close", callback_data="admin_close")
-        ]
-    ])
-
-async def generate_user_mgmt_menu():
-    """Generate user management submenu"""
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("⬆️ Promote User", callback_data="admin_promote"),
-            InlineKeyboardButton("⬇️ Demote User", callback_data="admin_demote")
-        ],
-        [
-            InlineKeyboardButton("📜 List Admins", callback_data="admin_list_admins"),
-            InlineKeyboardButton("👥 List Users", callback_data="admin_list_users")
-        ],
-        [
-            InlineKeyboardButton("🔙 Back", callback_data="admin_back"),
-            InlineKeyboardButton("🏠 Home", callback_data="admin_home")
-        ]
-    ])
-
-async def generate_backup_menu():
-    """Generate backup/restore submenu"""
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("📤 Create Backup", callback_data="admin_create_backup"),
-            InlineKeyboardButton("📥 Restore Backup", callback_data="admin_restore_backup")
-        ],
-        [
-            InlineKeyboardButton("🔙 Back", callback_data="admin_back"),
-            InlineKeyboardButton("🏠 Home", callback_data="admin_home")
-        ]
-    ])
-
-# ======================== COMMAND HANDLERS ========================
 @Client.on_message(filters.command("admin") & admin_filter)
-async def admin_panel(client: Client, message: Message):
-    """Main admin panel entry point"""
-    await message.reply(
-        "✨ **Admin Panel** ✨\n\n"
-        "▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n"
-        "Manage your bot with the options below:",
-        reply_markup=await generate_admin_menu()
-    )
-
-# ======================== CALLBACK QUERY HANDLERS ========================
-@Client.on_callback_query(filters.regex("^admin_"))
-async def admin_callback_handler(client: Client, query: CallbackQuery):
-    data = query.data
+async def admin_panel(client, message):
+    # Calculate bot uptime
+    uptime = datetime.now() - START_TIME
+    hours, remainder = divmod(int(uptime.total_seconds()), 3600)
+    minutes, seconds = divmod(remainder, 60)
+    days, hours = divmod(hours, 24)
+    uptime_str = f"{days}d {hours}h {minutes}m {seconds}s"
     
-    if data == "admin_home":
-        await query.message.edit_text(
-            "✨ **Admin Panel** ✨\n\n"
-            "▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n"
-            "Manage your bot with the options below:",
-            reply_markup=await generate_admin_menu()
-        )
+    # Get stats
+    total_users = await db.total_users_count()
+    total_admins = len(await db.get_all_admins())
+    total_channels = len(await db.get_all_channels())
     
-    elif data == "admin_back":
-        await query.message.edit_text(
-            "✨ **Admin Panel** ✨\n\n"
-            "▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n"
-            "Manage your bot with the options below:",
-            reply_markup=await generate_admin_menu()
-        )
-    
-    elif data == "admin_close":
-        await query.message.delete()
-    
-    elif data == "admin_user_mgmt":
-        await query.message.edit_text(
-            "👑 **User Management**\n\n"
-            "▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n"
-            "Manage admin users and permissions:",
-            reply_markup=await generate_user_mgmt_menu()
-        )
-    
-    elif data == "admin_stats":
-        # Get all statistics
-        total_users = await db.total_users_count()
-        total_admins = len(await db.get_all_admins())
-        total_channels = len(await db.get_all_channels())
-        uptime = format_time(int(time.time() - BOT_START_TIME))
-        
-        # System performance
-        cpu_usage = psutil.cpu_percent()
-        memory = psutil.virtual_memory()
-        mem_usage = memory.percent
-        disk = psutil.disk_usage('/')
-        disk_usage = disk.percent
-        
-        stats_text = f"""
-📈 **Bot Statistics Dashboard**
+    # Create admin panel with buttons
+    text = f"""
+<b>🤖 ADMIN PANEL</b>
 
-▬▬▬▬▬▬▬▬▬▬▬▬▬▬
-👥 **Users**
-├─ Total Users: `{total_users}`
-└─ Total Admins: `{total_admins}`
-
-📡 **Connections**
-└─ Connected Channels: `{total_channels}`
-
-⏱ **Performance**
-├─ Uptime: `{uptime}`
-├─ CPU Usage: `{cpu_usage}%`
-├─ Memory Usage: `{mem_usage}%`
-└─ Disk Usage: `{disk_usage}%`
-▬▬▬▬▬▬▬▬▬▬▬▬▬▬
-
-🔄 Last Updated: `{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}`
+📊 <b>Statistics:</b>
+├ 👥 Users: <code>{total_users}</code>
+├ 👑 Admins: <code>{total_admins}</code>
+├ 📢 Channels: <code>{total_channels}</code>
+└ ⏰ Uptime: <code>{uptime_str}</code>
 """
-        buttons = [
-            [InlineKeyboardButton("🔄 Refresh", callback_data="admin_stats")],
-            [InlineKeyboardButton("🔙 Back", callback_data="admin_back")]
-        ]
-        await query.message.edit_text(
-            stats_text,
-            reply_markup=InlineKeyboardMarkup(buttons)
-        )
+    buttons = InlineKeyboardMarkup([
+        [InlineKeyboardButton("👑 Admin Management", callback_data="admin_management")],
+        [InlineKeyboardButton("📢 Broadcast", callback_data="broadcast_menu"),
+         InlineKeyboardButton("📊 Stats", callback_data="stats_menu")],
+        [InlineKeyboardButton("🔰 Backup/Restore", callback_data="backup_menu")]
+    ])
     
-    elif data == "admin_list_admins":
-        admins = await db.get_all_admins()
-        if not admins:
-            text = "🚫 **No admins found!**"
-        else:
-            text = "👑 **Admin List**\n\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n"
-            for admin in admins:
-                try:
-                    user = await client.get_users(admin["_id"])
-                    text += f"✨ **{user.mention}**\n"
-                    text += f"🆔 `{user.id}`\n"
-                    text += f"⏰ Added: `{admin.get('added_at', 'Unknown')}`\n"
-                    text += "▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n"
-                except Exception as e:
-                    text += f"👤 Unknown User\n🆔 `{admin['_id']}`\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n"
-        
-        buttons = [
-            [InlineKeyboardButton("🔙 Back", callback_data="admin_user_mgmt")]
-        ]
-        await query.message.edit_text(
-            text,
-            reply_markup=InlineKeyboardMarkup(buttons)
-        )
+    await message.reply_text(text, reply_markup=buttons)
+
+# ==================================== ADMIN MANAGEMENT ====================================
+
+@Client.on_callback_query(filters.regex("^admin_management$") & admin_filter)
+async def admin_management(client, query: CallbackQuery):
+    text = """
+<b>👑 ADMIN MANAGEMENT</b>
+
+Manage bot admins with the options below:
+"""
+    buttons = InlineKeyboardMarkup([
+        [InlineKeyboardButton("➕ Promote User", callback_data="promote_user"),
+         InlineKeyboardButton("➖ Demote User", callback_data="demote_user")],
+        [InlineKeyboardButton("📜 List Admins", callback_data="list_admins")],
+        [InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]
+    ])
     
-    elif data == "admin_backup":
-        await query.message.edit_text(
-            "💾 **Backup Management**\n\n"
-            "▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n"
-            "Create or restore database backups:",
-            reply_markup=await generate_backup_menu()
-        )
-    
-    elif data == "admin_create_backup":
-        try:
-            # Create loading message
-            msg = await query.message.edit_text(
-                "⏳ **Creating Backup...**\n\n"
-                "▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n"
-                "Please wait while we prepare your backup file."
-            )
-            
-            # Get data
-            channels = [{"_id": c["_id"], "name": c.get("name")} for c in await db.get_all_channels()]
-            admins = [{"_id": a["_id"], "added_at": a.get("added_at")} for a in await db.get_all_admins()]
-            
-            # Prepare backup
-            backup = {
-                "meta": {
-                    "created_at": datetime.now().isoformat(),
-                    "bot_version": "1.0",
-                    "total_users": await db.total_users_count(),
-                    "total_channels": len(channels),
-                    "total_admins": len(admins)
-                },
-                "data": {
-                    "channels": channels,
-                    "admins": admins
-                }
-            }
-            
-            # Save to file
-            filename = f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-            with open(filename, "w") as f:
-                json.dump(backup, f, indent=4)
-            
-            # Send file
-            await client.send_document(
-                query.message.chat.id,
-                filename,
-                caption="✅ **Backup Created Successfully!**\n\n"
-                       f"📅 Created: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`\n"
-                       f"📦 Size: `{os.path.getsize(filename)/1024:.2f} KB`",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 Back", callback_data="admin_backup")]
-                ])
-            )
-            await msg.delete()
-            os.remove(filename)
-            
-        except Exception as e:
-            await query.message.edit_text(
-                f"❌ **Backup Failed!**\n\n"
-                f"Error: `{str(e)}`",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 Back", callback_data="admin_backup")]
-                ])
-            )
-            if os.path.exists(filename):
-                os.remove(filename)
-    
+    await query.edit_message_text(text, reply_markup=buttons)
     await query.answer()
 
-# ======================== COMMAND HANDLERS WITH INLINE UI ========================
-@Client.on_message(filters.command("promote") & admin_filter)
-async def promote_user(client: Client, message: Message):
-    if not message.reply_to_message and len(message.command) < 2:
-        await message.reply(
-            "⬆️ **Promote User**\n\n"
-            "▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n"
-            "Reply to a user or send their ID to promote them.\n\n"
-            "Example:\n`/promote @username` or reply to a user with `/promote`",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("👑 User Management", callback_data="admin_user_mgmt")],
-                [InlineKeyboardButton("🏠 Admin Panel", callback_data="admin_home")]
-            ])
-        )
-        return
-    
-    try:
-        user_id = message.reply_to_message.from_user.id if message.reply_to_message else int(message.command[1])
-        user = await client.get_users(user_id)
-        
-        await db.add_admin(user_id)
-        
-        await message.reply(
-            f"✅ **Successfully Promoted!**\n\n"
-            f"▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n"
-            f"👤 User: {user.mention}\n"
-            f"🆔 ID: `{user.id}`\n"
-            f"⏰ At: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("📜 List Admins", callback_data="admin_list_admins")],
-                [InlineKeyboardButton("🏠 Admin Panel", callback_data="admin_home")]
-            ])
-        )
-    except Exception as e:
-        await message.reply(
-            f"❌ **Promotion Failed**\n\n"
-            f"Error: `{str(e)}`",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🛠 Help", callback_data="admin_help")]
-            ])
-        )
-
-@Client.on_message(filters.command("broadcast") & admin_filter & filters.reply)
-async def broadcast_handler(client: Client, message: Message):
-    # Initial message with loading animation
-    msg = await message.reply(
-        "📢 **Broadcast Initializing...**\n\n"
-        "▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n"
-        "⏳ Preparing to send to all users..."
-    )
-    
-    all_users = await db.get_all_users()
-    broadcast_msg = message.reply_to_message
-    total_users = await db.total_users_count()
-    
-    # Progress tracking
-    progress = {
-        "done": 0,
-        "success": 0,
-        "failed": 0,
-        "start": time.time()
-    }
-    
-    # Update progress every 20 users
-    async def update_progress():
-        elapsed = format_time(int(time.time() - progress["start"]))
-        await msg.edit_text(
-            f"📢 **Broadcast in Progress**\n\n"
-            f"▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n"
-            f"✅ Success: `{progress['success']}`\n"
-            f"❌ Failed: `{progress['failed']}`\n"
-            f"📊 Progress: `{progress['done']}/{total_users}`\n"
-            f"⏱ Elapsed: `{elapsed}`\n\n"
-            f"🔄 Processing...",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🛑 Cancel", callback_data="broadcast_cancel")]
-            ])
-        )
-    
-    # Send messages
-    async for user in all_users:
-        if progress["done"] % 20 == 0:
-            await update_progress()
-        
-        try:
-            await broadcast_msg.copy(chat_id=int(user['_id']))
-            progress["success"] += 1
-        except Exception as e:
-            logger.error(f"Broadcast failed for {user['_id']}: {str(e)}")
-            progress["failed"] += 1
-            if isinstance(e, (InputUserDeactivated, UserIsBlocked)):
-                await db.delete_user(user['_id'])
-        
-        progress["done"] += 1
-    
-    # Final report
-    elapsed = format_time(int(time.time() - progress["start"]))
-    await msg.edit_text(
-        f"✅ **Broadcast Completed!**\n\n"
-        f"▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n"
-        f"📊 Total Users: `{total_users}`\n"
-        f"✅ Success: `{progress['success']}`\n"
-        f"❌ Failed: `{progress['failed']}`\n"
-        f"⏱ Time Taken: `{elapsed}`\n\n"
-        f"🔄 Last Updated: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`",
+@Client.on_callback_query(filters.regex("^promote_user$") & admin_filter)
+async def promote_user_callback(client, query: CallbackQuery):
+    await query.edit_message_text(
+        "To promote a user:\n\n"
+        "1. Reply to their message with <code>/promote</code>\n"
+        "OR\n"
+        "2. Use <code>/promote user_id</code>",
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🏠 Admin Panel", callback_data="admin_home")]
+            [InlineKeyboardButton("🔙 Back", callback_data="admin_management")]
         ])
     )
+    await query.answer()
 
-# ======================== ERROR HANDLER ========================
-@Client.on_callback_query(filters.regex("^broadcast_cancel$"))
-async def cancel_broadcast(client: Client, query: CallbackQuery):
-    await query.answer("Broadcast cannot be canceled once started!", show_alert=True)
+@Client.on_callback_query(filters.regex("^demote_user$") & admin_filter)
+async def demote_user_callback(client, query: CallbackQuery):
+    await query.edit_message_text(
+        "To demote a user:\n\n"
+        "1. Reply to their message with <code>/demote</code>\n"
+        "OR\n"
+        "2. Use <code>/demote user_id</code>",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔙 Back", callback_data="admin_management")]
+        ])
+    )
+    await query.answer()
+
+@Client.on_callback_query(filters.regex("^list_admins$") & admin_filter)
+async def list_admins_callback(client, query: CallbackQuery):
+    admins = await db.get_all_admins()
+    if not admins:
+        text = "No admins found!"
+    else:
+        text = "👑 <b>Admin List</b>\n\n"
+        for admin in admins:
+            try:
+                user = await client.get_users(admin["_id"])
+                text += f"• {user.mention} (<code>{user.id}</code>)\n"
+                text += f"  ⏰ Added: <code>{admin.get('added_at', 'Unknown')}</code>\n\n"
+            except:
+                text += f"• Unknown User (<code>{admin['_id']}</code>)\n\n"
+    
+    await query.edit_message_text(
+        text,
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔙 Back", callback_data="admin_management")]
+        ])
+    )
+    await query.answer()
+
+# ==================================== BROADCAST MENU ====================================
+
+@Client.on_callback_query(filters.regex("^broadcast_menu$") & admin_filter)
+async def broadcast_menu(client, query: CallbackQuery):
+    total_users = await db.total_users_count()
+    text = f"""
+<b>📢 BROADCAST MESSAGE</b>
+
+Current subscribers: <code>{total_users}</code>
+
+To send a broadcast:
+1. Reply to any message with <code>/broadcast</code>
+"""
+    buttons = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]
+    ])
+    
+    await query.edit_message_text(text, reply_markup=buttons)
+    await query.answer()
+
+# ==================================== STATS MENU ====================================
+
+@Client.on_callback_query(filters.regex("^stats_menu$") & admin_filter)
+async def stats_menu(client, query: CallbackQuery):
+    # Calculate bot uptime
+    uptime = datetime.now() - START_TIME
+    hours, remainder = divmod(int(uptime.total_seconds()), 3600)
+    minutes, seconds = divmod(remainder, 60)
+    days, hours = divmod(hours, 24)
+    uptime_str = f"{days}d {hours}h {minutes}m {seconds}s"
+    
+    # Get stats
+    total_users = await db.total_users_count()
+    total_admins = len(await db.get_all_admins())
+    total_channels = len(await db.get_all_channels())
+    
+    text = f"""
+<b>📊 BOT STATISTICS</b>
+
+👥 <b>Total Users:</b> <code>{total_users}</code>
+👑 <b>Total Admins:</b> <code>{total_admins}</code>
+📢 <b>Total Channels:</b> <code>{total_channels}</code>
+⏰ <b>Uptime:</b> <code>{uptime_str}</code>
+"""
+    buttons = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔄 Refresh", callback_data="stats_menu"),
+         InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]
+    ])
+    
+    await query.edit_message_text(text, reply_markup=buttons)
+    await query.answer()
+
+# ==================================== BACKUP/RESTORE MENU ====================================
+
+@Client.on_callback_query(filters.regex("^backup_menu$") & admin_filter)
+async def backup_menu(client, query: CallbackQuery):
+    text = """
+<b>🔰 BACKUP & RESTORE</b>
+
+• <b>Backup:</b> Creates a JSON file with channels and admins data
+• <b>Restore:</b> Restores data from a backup file
+
+Commands:
+• <code>/backup</code> - Create a backup
+• <code>/restore</code> (reply to backup file) - Restore data
+"""
+    buttons = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]
+    ])
+    
+    await query.edit_message_text(text, reply_markup=buttons)
+    await query.answer()
+
+# ==================================== BACK BUTTON ====================================
+
+@Client.on_callback_query(filters.regex("^back_to_main$") & admin_filter)
+async def back_to_main(client, query: CallbackQuery):
+    # Reuse the admin_panel function to return to main menu
+    await admin_panel(client, query.message)
+    await query.answer()
+
+# ==================================== ORIGINAL COMMANDS (KEPT FOR COMPATIBILITY) ====================================
+
+@Client.on_message(filters.command("promote") & filters.user(ADMIN))
+async def promote_user(client, message):
+    if not message.reply_to_message and len(message.command) < 2:
+        return await message.reply("Reply to a user or use: /promote user_id")
+    
+    if message.reply_to_message:
+        user_id = message.reply_to_message.from_user.id
+    else:
+        try:
+            user_id = int(message.command[1])
+        except:
+            return await message.reply("Invalid user ID!")
+
+    await db.add_admin(user_id)
+    await message.reply(f"✅ Promoted user {user_id} to admin!")
+
+@Client.on_message(filters.command("demote") & filters.user(ADMIN))
+async def demote_user(client, message):
+    if not message.reply_to_message and len(message.command) < 2:
+        return await message.reply("Reply to a user or use: /demote user_id")
+    
+    if message.reply_to_message:
+        user_id = message.reply_to_message.from_user.id
+    else:
+        try:
+            user_id = int(message.command[1])
+        except:
+            return await message.reply("Invalid user ID!")
+
+    await db.remove_admin(user_id)
+    await message.reply(f"❌ Demoted user {user_id}")
+
+@Client.on_message(filters.command("broadcast") & filters.user(ADMIN) & filters.reply)
+async def broadcast_handler(bot: Client, m: Message):
+    all_users = await db.get_all_users()
+    broadcast_msg = m.reply_to_message
+    sts_msg = await m.reply_text("📢 <b>Broadcast started!</b>")
+    
+    done, failed, success = 0, 0, 0
+    start_time = time.time()
+    total_users = await db.total_users_count()
+
+    async for user in all_users:
+        sts = await send_msg(bot, user['_id'], broadcast_msg)
+        if sts == 200:
+            success += 1
+        else:
+            failed += 1
+        if sts == 400:
+            await db.delete_user(user['_id'])
+
+        done += 1
+        if not done % 20:
+            await sts_msg.edit(
+                f"📊 <b>Broadcast Progress:</b>\n\n"
+                f"👥 Total Users: <code>{total_users}</code>\n"
+                f"✅ Completed: <code>{done}</code> / <code>{total_users}</code>\n"
+                f"✔️ Success: <code>{success}</code>\n"
+                f"❌ Failed: <code>{failed}</code>"
+            )
+
+    completed_in = timedelta(seconds=int(time.time() - start_time))
+    await sts_msg.edit(
+        f"✅ <b>Broadcast Completed!</b>\n\n"
+        f"⏱️ Time taken: <code>{completed_in}</code>\n"
+        f"👥 Total Users: <code>{total_users}</code>\n"
+        f"✅ Completed: <code>{done}</code> / <code>{total_users}</code>\n"
+        f"✔️ Success: <code>{success}</code>\n"
+        f"❌ Failed: <code>{failed}</code>"
+    )
+
+async def send_msg(bot, user_id, message):
+    try:
+        await message.copy(chat_id=int(user_id))
+        return 200
+    except FloodWait as e:
+        await asyncio.sleep(e.value)
+        return await send_msg(bot, user_id, message)
+    except InputUserDeactivated:
+        logger.info(f"{user_id} : deactivated")
+        return 400
+    except UserIsBlocked:
+        logger.info(f"{user_id} : blocked the bot")
+        return 400
+    except PeerIdInvalid:
+        logger.info(f"{user_id} : user id invalid")
+        return 400
+    except Exception as e:
+        logger.error(f"{user_id} : {e}")
+        return 500
+
+@Client.on_message(filters.command("backup") & admin_filter)
+async def backup_data(client, message):
+    try:        
+        channels = [{"_id": c["_id"], "name": c.get("name")} for c in await db.get_all_channels()]
+        admins = [{"_id": a["_id"]} for a in await db.get_all_admins()]
+        
+        backup = {
+            "channels": channels,
+            "admins": admins,
+            "backup_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+        me = await client.get_me()
+        filename = f"{me.username}_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        with open(filename, "w") as f:
+            json.dump(backup, f, indent=4)
+        
+        await client.send_document(
+            message.chat.id, 
+            filename, 
+            caption=f"📦 <b>Backup File</b>\n\n"
+                    f"📅 <b>Date:</b> <code>{backup['backup_date']}</code>\n"
+                    f"📢 <b>Channels:</b> <code>{len(backup['channels'])}</code>\n"
+                    f"👑 <b>Admins:</b> <code>{len(backup['admins'])}</code>"
+        )
+        os.remove(filename)
+        await message.reply("✅ <b>Backup completed successfully!</b>")
+        
+    except Exception as e:
+        await message.reply(f"❌ <b>Backup failed:</b> <code>{str(e)}</code>")
+        if 'filename' in locals() and os.path.exists(filename):
+            os.remove(filename)
+
+@Client.on_message(filters.command("restore") & admin_filter)
+async def restore_data(client, message):
+    if not message.reply_to_message or not message.reply_to_message.document:
+        return await message.reply("⚠️ <b>Please reply to a backup file</b>")
+    
+    try:
+        msg = await message.reply("🔄 <b>Restoring data...</b>")
+        file = await message.reply_to_message.download()
+        
+        with open(file, "r") as f:
+            backup = json.load(f)
+        
+        # Restore channels
+        channels_count = 0
+        for channel in backup.get("channels", []):
+            await db.add_channel(channel["_id"], channel.get("name"))
+            channels_count += 1
+        
+        # Restore admins
+        admins_count = 0
+        for admin in backup.get("admins", []):
+            await db.add_admin(admin["_id"])
+            admins_count += 1
+        
+        os.remove(file)
+        await msg.edit(
+            f"✅ <b>Restore completed successfully!</b>\n\n"
+            f"📢 <b>Channels restored:</b> <code>{channels_count}</code>\n"
+            f"👑 <b>Admins restored:</b> <code>{admins_count}</code>\n"
+            f"📅 <b>Backup date:</b> <code>{backup.get('backup_date', 'Unknown')}</code>"
+        )
+        
+    except Exception as e:
+        await message.reply(f"❌ <b>Restore failed:</b> <code>{str(e)}</code>")
+        if 'file' in locals() and os.path.exists(file):
+            os.remove(file)
+        
