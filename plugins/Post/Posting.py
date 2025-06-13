@@ -59,9 +59,9 @@ async def send_post(client, message: Message):
         return
     
     if not message.reply_to_message:
-        await message.reply("**Reply to a message to post it.**")	    
-	return
-    
+        await message.reply("**Reply to a message to post it.**")
+        return
+
     delete_after = None
     time_input = None
     if len(message.command) > 1:
@@ -272,7 +272,7 @@ async def handle_deletion_results(client, deletion_tasks, post_id, delay_seconds
 
 
 
-@Client.on_message(filters.command("fpost") & filters.private & admin_filter)
+@Client.on_message(filters.command("fpost") & filters.private & filters.user(ADMIN))
 async def forward_post(client, message: Message):
     try:
         await message.react(emoji=random.choice(REACTIONS), big=True)
@@ -403,5 +403,5 @@ async def forward_post(client, message: Message):
                 post_id=post_id,
                 delay_seconds=delete_after
             )
-        )
-
+	)
+	    
