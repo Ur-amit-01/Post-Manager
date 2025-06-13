@@ -139,6 +139,11 @@ async def send_msg(bot, user_id, message):
 async def backup_data(client, message):
     """Simple backup of channels and admins to JSON"""
     try:
+
+        # Get bot username
+        me = await client.get_me()
+        bot_username = me.username
+        
         # Get all channels and admins
         channels = await db.get_all_channels()
         admins = await db.get_all_admins()
@@ -152,7 +157,7 @@ async def backup_data(client, message):
         
 # Save to JSON file
         timestamp = datetime.now().strftime("%d-%m-%Y")
-        filename = f"{BOT_USERNAME}_backup_{timestamp}.json"
+        filename = f"{bot_username}_backup_{timestamp}.json"
         with open(filename, "w") as f:
             json.dump(backup, f, indent=4)
         
