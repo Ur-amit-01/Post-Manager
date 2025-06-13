@@ -28,28 +28,12 @@ admin_filter = filters.create(admins_only)
 
 @Client.on_message(filters.command("admin") & admin_filter)
 async def admin_panel(client, message):
-    # Calculate bot uptime
-    uptime = datetime.now() - START_TIME
-    hours, remainder = divmod(int(uptime.total_seconds()), 3600)
-    minutes, seconds = divmod(remainder, 60)
-    days, hours = divmod(hours, 24)
-    uptime_str = f"{days}d {hours}h {minutes}m {seconds}s"
-    
-    # Get stats
-    total_users = await db.total_users_count()
-    total_admins = len(await db.get_all_admins())
-    total_channels = len(await db.get_all_channels())
-    
     # Create admin panel with buttons
-    text = f"""
-<b>🤖 ADMIN PANEL</b>
+    text = """
+<b>🤖 ADMIN PANEL
 
-📊 <b>Statistics:</b>
-├ 👥 Users: <code>{total_users}</code>
-├ 👑 Admins: <code>{total_admins}</code>
-├ 📢 Channels: <code>{total_channels}</code>
-└ ⏰ Uptime: <code>{uptime_str}</code>
-"""
+Choose from the options below:
+</b>"""
     buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton("👑 Admin Management", callback_data="admin_management")],
         [InlineKeyboardButton("📢 Broadcast", callback_data="admin_broadcast_menu"),
@@ -57,12 +41,15 @@ async def admin_panel(client, message):
         [InlineKeyboardButton("🔰 Backup/Restore", callback_data="admin_backup_menu")]
     ])
     
-    # Check if we should edit or send new message
-    if hasattr(message, 'data') and isinstance(message, CallbackQuery):
+    # For callback queries (navigation)
+    if isinstance(message, CallbackQuery):
         await message.message.edit_text(text, reply_markup=buttons)
         await message.answer()
+    # For command (first time opening)
     else:
-        await message.reply_text(text, reply_markup=buttons)
+        if message.chat.type == "private":
+            await message.delete()
+        msg = await message.reply_text(text, reply_markup=buttons)
 
 # ==================================== ADMIN MANAGEMENT ====================================
 
