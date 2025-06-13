@@ -3,6 +3,8 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQ
 from config import *
 from plugins.helper.db import db
 import random
+from plugins.Post.admin_panel import admin_filter
+
 # =====================================================================================
 
 @Client.on_message(filters.private & filters.command("start"))
@@ -51,7 +53,7 @@ async def id_command(client: Client, message: Message):
     )
 # =====================================================================================
 # Set bot commands
-@Client.on_message(filters.command("set") & filters.user(ADMIN))
+@Client.on_message(filters.command("set") & admin_filter)
 async def set_commands(client: Client, message: Message):
     await client.set_bot_commands([
         BotCommand("start", "🤖 ꜱᴛᴀʀᴛ ᴍᴇ"),
