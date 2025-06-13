@@ -64,9 +64,8 @@ async def list_admins(client, message):
     for admin in admins:
         try:
             user = await client.get_users(admin["_id"])
-            text += f"• {user.mention} (`{user.id}`)\n"
-            text += f"  ⏰ Added: `{admin.get('added_at', 'Unknown')}`\n"
-            text += f"  🔍 Last Active: `{admin.get('last_active', 'Never')}`\n\n"
+            text += f"**• {user.mention} (`{user.id}`)**\n"
+            text += f"**  ⏰ Added: `{admin.get('added_at', 'Unknown')}`**\n\n"
         except:
             text += f"• Unknown User (`{admin['_id']}`)\n\n"
     
