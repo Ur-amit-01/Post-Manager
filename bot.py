@@ -5,7 +5,7 @@ from config import *
 from aiohttp import web
 from plugins.Post.Posting import restore_pending_deletions
 from plugins.Post.admin_panel import auto_backup_task
-
+import asyncio
 
 logging.config.fileConfig('logging.conf')
 logging.getLogger().setLevel(logging.INFO)
