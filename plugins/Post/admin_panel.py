@@ -53,9 +53,9 @@ async def demote_user(client, message):
     await message.reply(f"❌ Demoted user {user_id}")
 
 
-@Client.on_message(filters.command("listadmins") & filters.user(ADMIN))
+@Client.on_message(filters.command("listadmins") & admin_filter)
 async def list_admins(client, message):
-    """List all admins with details"""
+    """List all admins with details (date only)"""
     admins = await db.get_all_admins()
     if not admins:
         return await message.reply("No admins found!")
@@ -64,10 +64,12 @@ async def list_admins(client, message):
     for admin in admins:
         try:
             user = await client.get_users(admin["_id"])
+            # Extract just the date portion
+            added_date = str(admin.get('added_at', 'Unknown')).split()[0] if admin.get('added_at') else 'Unknown'
             text += f"**• {user.mention} (`{user.id}`)**\n"
-            text += f"**  ⏰ Added: `{admin.get('added_at', 'Unknown')}`**\n\n"
+            text += f"**  📅 Added: `{added_date}`**\n\n"
         except:
-            text += f"• Unknown User (`{admin['_id']}`)\n\n"
+            text += f"**• Unknown User (`{admin['_id']}`)**\n\n"
     
     await message.reply(text)
     
