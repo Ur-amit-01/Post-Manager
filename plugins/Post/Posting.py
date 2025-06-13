@@ -59,8 +59,8 @@ async def send_post(client, message: Message):
         return
     
     if not message.reply_to_message:
-        await message.reply("**Reply to a message to post it.**")
-	    return
+        await message.reply("**Reply to a message to post it.**")	    
+	return
     
     delete_after = None
     time_input = None
