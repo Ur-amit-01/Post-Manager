@@ -60,10 +60,10 @@ async def back_to_main(client, query: CallbackQuery):
 @Client.on_callback_query(filters.regex("^admin_management$") & admin_filter)
 async def admin_management(client, query: CallbackQuery):
     text = """
-<b>👑 ADMIN MANAGEMENT</b>
+<b>👑 ADMIN MANAGEMENT
 
 Manage bot admins with the options below:
-"""
+</b>"""
     buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton("➕ Promote User", callback_data="promote_user"),
          InlineKeyboardButton("➖ Demote User", callback_data="demote_user")],
@@ -77,10 +77,8 @@ Manage bot admins with the options below:
 @Client.on_callback_query(filters.regex("^promote_user$") & admin_filter)
 async def promote_user_callback(client, query: CallbackQuery):
     await query.edit_message_text(
-        "To promote a user:\n\n"
-        "1. Reply to their message with <code>/promote</code>\n"
-        "OR\n"
-        "2. Use <code>/promote user_id</code>",
+        "**🔸 To promote a user:**\n\n"
+        "**1. Use <code>/promote user_id</code>**",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("🔙 Back", callback_data="admin_management")]
         ])
@@ -90,10 +88,8 @@ async def promote_user_callback(client, query: CallbackQuery):
 @Client.on_callback_query(filters.regex("^demote_user$") & admin_filter)
 async def demote_user_callback(client, query: CallbackQuery):
     await query.edit_message_text(
-        "To demote a user:\n\n"
-        "1. Reply to their message with <code>/demote</code>\n"
-        "OR\n"
-        "2. Use <code>/demote user_id</code>",
+        "**🔸 To demote a user:**\n\n"
+        "**1. Use <code>/demote user_id</code>**",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("🔙 Back", callback_data="admin_management")]
         ])
@@ -110,8 +106,8 @@ async def list_admins_callback(client, query: CallbackQuery):
         for admin in admins:
             try:
                 user = await client.get_users(admin["_id"])
-                text += f"• {user.mention} (<code>{user.id}</code>)\n"
-                text += f"  ⏰ Added: <code>{admin.get('added_at', 'Unknown')}</code>\n\n"
+                text += f"🫦 {user.mention} (<code>{user.id}</code>)\n"
+                text += f"🔸 Added: <code>{admin.get('added_at', 'Unknown')}</code>\n\n"
             except:
                 text += f"• Unknown User (<code>{admin['_id']}</code>)\n\n"
     
@@ -129,13 +125,13 @@ async def list_admins_callback(client, query: CallbackQuery):
 async def broadcast_menu(client, query: CallbackQuery):
     total_users = await db.total_users_count()
     text = f"""
-<b>📢 BROADCAST MESSAGE</b>
+<b>📢 BROADCAST MESSAGE
 
-Current subscribers: <code>{total_users}</code>
+🔺 Current users: <code>{total_users}</code>
 
-To send a broadcast:
+🔸 To send a broadcast:
 1. Reply to any message with <code>/broadcast</code>
-"""
+</b>"""
     buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]
     ])
@@ -185,7 +181,7 @@ async def backup_menu(client, query: CallbackQuery):
 • <b>Backup:</b> Creates a JSON file with channels and admins data
 • <b>Restore:</b> Restores data from a backup file
 
-Commands:
+<b>🤖 Commands:</b>
 • <code>/backup</code> - Create a backup
 • <code>/restore</code> (reply to backup file) - Restore data
 """
