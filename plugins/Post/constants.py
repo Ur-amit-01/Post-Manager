@@ -6,28 +6,24 @@ MAIN_HELP_TXT = """
 <blockquote><u>👮 Admin Commands</u>:</blockquote>
 • /start - Start the bot
 • /channels - List all connected channels
-• /post [time] - Post a message to all channels (reply to a message)
+• /admin - Access admin controls
+• /post - Post a message to all channels (reply to a message)
 • /del_post <post_id> - Delete a specific post from all channels
 • /add - Add current channel (use in channel)
 • /rem - Remove current channel (use in channel)
 
-<blockquote><u>⏱ Time Format Examples</u>:</blockquote>
-• /post 1h30m - Post with 1 hour 30 minute delay
-• /post 2d - Post with 2 day delay
-• /post 45min - Post with 45 minute delay
-• /post 30s - Post with 30 second delay
 
-<blockquote><u>🔧 Other Features</u>:</blockquote>
+<blockquote><u>🔧 Advanced Features</u>:</blockquote>
 • Auto-delete posts after specified time
 • Post tracking with unique IDs
-• Simple channel management
+• Easy channel management
 
 <blockquote><u>📊 Stats</u>:</blockquote>
 • Total connected channels
 • Success/failure rate tracking
 • Post history
 
-<blockquote>Developed by : @Axa_bachha</blockquote> </b>
+<blockquote>Developed by : @xDzoddd</blockquote> </b>
 """
 
 POST_HELP_TXT = """
@@ -81,7 +77,7 @@ DELETE_HELP_TXT = """
 ABOUT_TXT = """
 <b>╭───────────⍟
 ├➢ ᴍʏꜱᴇʟꜰ : {}
-├➢ ᴅᴇᴠᴇʟᴏᴘᴇʀ : <a href=https://t.me/axa_bachha>𝐻𝑜𝑚𝑜 𝑠𝑎𝑝𝑖𝑒𝑛『❅』</a>
+├➢ ᴅᴇᴠᴇʟᴏᴘᴇʀ : <a href=https://t.me/xDzoddd>Amit Singh 🪫ᯤ̸</a>
 ├➢ ʟɪʙʀᴀʀʏ : <a href=https://github.com/pyrogram>ᴘʏʀᴏɢʀᴀᴍ</a>
 ├➢ ʟᴀɴɢᴜᴀɢᴇ : <a href=https://www.python.org>ᴘʏᴛʜᴏɴ 3</a>
 ├➢ ᴅᴀᴛᴀʙᴀꜱᴇ : <a href=https://cloud.mongodb.com>MᴏɴɢᴏDB</a>
@@ -89,7 +85,7 @@ ABOUT_TXT = """
 ├➢ ʙᴜɪʟᴅ ꜱᴛᴀᴛᴜꜱ  : ᴘʏᴛʜᴏɴ v3.6.8
 ╰───────────────⍟
 
-➢ ɴᴏᴛᴇ :- Interested Owners can DM for personal bot. 🤝🏻
+➢ ɴᴏᴛᴇ :- Interested Owners can DM @xDzoddd for personal bot. 🤝🏻
 </b>"""
 
 RESTRICTED_TXT = """
