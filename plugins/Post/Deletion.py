@@ -2,8 +2,9 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from plugins.helper.db import db  # Database helper
 from config import ADMIN
+from plugins.Post.admin_panel import admin_filter
 
-@Client.on_message(filters.command("del_post") & filters.private & filters.user(ADMIN))
+@Client.on_message(filters.command("del_post") & filters.private & admin_filter)
 async def delete_post_manually(client, message: Message):
     try:
         await message.react(emoji=random.choice(REACTIONS), big=True)
