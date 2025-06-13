@@ -156,8 +156,8 @@ async def backup_data(client, message):
         }
         
 # Save to JSON file
-        timestamp = datetime.now().strftime("%d-%m-%Y")
-        filename = f"{bot_username}_backup_{timestamp}.json"
+        
+        filename = f"{bot_username}_backup.json"
         with open(filename, "w") as f:
             json.dump(backup, f, indent=4)
         
