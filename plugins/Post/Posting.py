@@ -6,6 +6,7 @@ import random
 from plugins.helper.time_parser import *
 import asyncio
 from config import *
+from plugins.Post.admin_panel import admin_filter
 
 async def restore_pending_deletions(client):
     """Restore pending deletions when bot starts"""
@@ -47,12 +48,15 @@ async def restore_pending_deletions(client):
     except Exception as e:
         print(f"Error restoring pending deletions: {e}")
 
-@Client.on_message(filters.command("post") & filters.private & filters.user(ADMIN))
+@Client.on_message(filters.command("post") & filters.private & admin_filter)
 async def send_post(client, message: Message):
     try:
         await message.react(emoji=random.choice(REACTIONS), big=True)
     except:
         pass
+    if not await db.is_admin(message.from_user.id):
+        await message.reply("**❌ You are not authorized to use this command!**")
+        return
     
     if not message.reply_to_message:
         await message.reply("**Reply to a message to post it.**")
@@ -399,5 +403,5 @@ async def forward_post(client, message: Message):
                 post_id=post_id,
                 delay_seconds=delete_after
             )
-        )
-
+	)
+	    

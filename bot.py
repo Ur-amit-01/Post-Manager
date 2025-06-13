@@ -3,7 +3,7 @@ import logging.config
 from pyrogram import Client 
 from config import *
 from aiohttp import web
-from plugins.Post.Posting import restore_pending_deletions  # Import your existing function
+from plugins.Post.Posting import restore_pending_deletions
 
 logging.config.fileConfig('logging.conf')
 logging.getLogger().setLevel(logging.INFO)
@@ -11,7 +11,6 @@ logging.getLogger("pyrogram").setLevel(logging.ERROR)
 
 
 class Bot(Client):
-
     def __init__(self):
         super().__init__(
             name="renamer",
@@ -22,6 +21,7 @@ class Bot(Client):
             plugins={"root": "plugins"},
             sleep_threshold=5,
         )
+        self.admin_panel = None  # Initialize as None first
 
     async def start(self):
         await super().start()
@@ -37,7 +37,7 @@ class Bot(Client):
 
     async def stop(self, *args):
         await super().stop()      
-        logging.info("{me.first_name} Bot Stopped 🙄")
-
+        logging.info("Bot Stopped 🙄")
+    
 bot = Bot()
 bot.run()

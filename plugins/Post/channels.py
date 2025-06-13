@@ -5,11 +5,11 @@ import time
 import random
 import asyncio
 from config import *
+from plugins.Post.admin_panel import admin_filter
 
 # Command to add the current channel to the database
 @Client.on_message(filters.command("add") & filters.channel)
 async def add_current_channel(client, message: Message):
-
     channel_id = message.chat.id
     channel_name = message.chat.title
 
@@ -26,7 +26,6 @@ async def add_current_channel(client, message: Message):
 # Command to remove the current channel from the database
 @Client.on_message(filters.command("rem") & filters.channel)
 async def remove_current_channel(client, message: Message):
-
     channel_id = message.chat.id
     channel_name = message.chat.title
 
@@ -41,13 +40,15 @@ async def remove_current_channel(client, message: Message):
         await message.reply("❌ Failed to remove channel. Try again.")
 
 # Command to list all connected channels
-@Client.on_message(filters.command("channels") & filters.private & filters.user(ADMIN))
+@Client.on_message(filters.command("channels") & filters.private & admin_filter)
 async def list_channels(client, message: Message):
     try:
         await message.react(emoji=random.choice(REACTIONS), big=True)
     except:
         pass
-
+    if not await db.is_admin(message.from_user.id):
+        await message.reply("**❌ You are not authorized to use this command!**")
+        return
     channels = await db.get_all_channels()
 
     if not channels:

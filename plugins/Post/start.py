@@ -1,5 +1,5 @@
 from pyrogram import Client, filters
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery, Message, BotCommand
 from config import *
 from plugins.helper.db import db
 import random
@@ -20,7 +20,7 @@ async def start(client, message: Message):
 
     # Welcome message
     txt = (
-        f"> **✨👋🏻 Hey {message.from_user.mention} !!**\n"
+        f"> **✨👋🏻 Hey {message.from_user.mention} !!**\n\n"
         f"**Welcome to the Channel Manager Bot, Manage multiple channels and post messages with ease! 😌**\n\n"
         f"> **ᴅᴇᴠᴇʟᴏᴘᴇʀ 🧑🏻‍💻 :- @xDzoddd**"
     )
@@ -49,3 +49,18 @@ async def id_command(client: Client, message: Message):
         text=id_text,
         reply_to_message_id=message.id,
     )
+# =====================================================================================
+# Set bot commands
+@Client.on_message(filters.command("set") & filters.user(ADMIN))
+async def set_commands(client: Client, message: Message):
+    await client.set_bot_commands([
+        BotCommand("start", "🤖 ꜱᴛᴀʀᴛ ᴍᴇ"),
+        BotCommand("channels", "📋 ʟɪꜱᴛ ᴏꜰ ᴄᴏɴɴᴇᴄᴛᴇᴅ ᴄʜᴀɴɴᴇʟꜱ"),
+        BotCommand("admin", "🛠️ ᴀᴅᴍɪɴ ᴘᴀɴᴇʟ"),
+        BotCommand("post", "📢 ꜱᴇɴᴅ ᴘᴏꜱᴛ"),
+        BotCommand("fpost", "📢 sᴇɴᴅ ᴘᴏsᴛ ᴡɪᴛʜ ғᴏʀᴡᴀʀᴅ ᴛᴀɢ"),
+        BotCommand("del_post", "🗑️ ᴅᴇʟᴇᴛᴇ ᴘᴏꜱᴛ"),
+        BotCommand("add", "➕ ᴀᴅᴅ ᴄʜᴀɴɴᴇʟ"),
+        BotCommand("rem", "➖ ʀᴇᴍᴏᴠᴇ ᴄʜᴀɴɴᴇʟ"),
+    ])
+    await message.reply_text("✅ Bot commands have been set.")
