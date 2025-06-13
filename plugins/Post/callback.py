@@ -16,6 +16,9 @@ async def cb_handler(client: Client, query: CallbackQuery):
     try:
         data = query.data
         logger.info(f"Received callback: {data} from {query.from_user.id}")
+
+        if data.startswith("admin_"):
+            return
         
         # Delete post handler
         if data.startswith("delete_"):
