@@ -1,9 +1,13 @@
 import motor.motor_asyncio
 import time
 from datetime import datetime
-from config import DB_URL, DB_NAME
+from config import *
 from typing import List, Dict, Optional, Union
 import math
+import os
+import shutil
+import subprocess
+
 
 class Database:
     def __init__(self, uri, database_name):
@@ -189,24 +193,63 @@ class Database:
             await self.log_error(f"Error retrieving posts: {e}")
             return []
 
-    # ============ Utility Methods ============ #
-    async def log_error(self, error_message: str):
-        """Log errors to database"""
+    # ============ admin panel Methods ============
+
+    async def create_backup(self):
+        """Create a manual backup of the database"""
         try:
-            await self.logs.insert_one({
-                "error": error_message,
-                "timestamp": datetime.now()
-            })
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            backup_dir = "backups"
+            os.makedirs(backup_dir, exist_ok=True)
+            backup_file = f"{backup_dir}/backup_{timestamp}.gz"
+            
+            # Create mongodump command
+            cmd = [
+                "mongodump",
+                "--uri", DB_URL,
+                "--archive=" + backup_file,
+                "--gzip"
+            ]
+            
+            # Execute backup
+            subprocess.run(cmd, check=True)
+            return backup_file
         except Exception as e:
-            print(f"Failed to log error: {e}")
+            await self.log_error(f"Backup failed: {str(e)}")
+            return None
 
-    async def cleanup_inactive_admins(self, days_inactive=30):
-        """Remove admins inactive for specified days"""
-        cutoff_date = datetime.now() - timedelta(days=days_inactive)
-        result = await self.admins.delete_many({
-            "last_active": {"$lt": cutoff_date}
-        })
-        return result.deleted_count
+    async def restore_backup(self, backup_file: str):
+        """Restore database from backup file"""
+        try:
+            if not os.path.exists(backup_file):
+                return False, "Backup file not found"
+            
+            cmd = [
+                "mongorestore",
+                "--uri", DB_URL,
+                "--archive=" + backup_file,
+                "--gzip",
+                "--drop"
+            ]
+            
+            subprocess.run(cmd, check=True)
+            return True, "Database restored successfully"
+        except Exception as e:
+            return False, f"Restore failed: {str(e)}"
 
+    async def auto_backup(self):
+        """Automatic weekly backup"""
+        try:
+            backup_file = await self.create_backup()
+            if backup_file:
+                # Get current date for weekly check
+                now = datetime.now()
+                if now.weekday() == 0:  # Monday
+                    return backup_file
+            return None
+        except Exception as e:
+            await self.log_error(f"Auto backup failed: {str(e)}")
+            return None
+            
 # Initialize the database
 db = Database(DB_URL, DB_NAME)
