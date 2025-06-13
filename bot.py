@@ -4,6 +4,8 @@ from pyrogram import Client
 from config import *
 from aiohttp import web
 from plugins.Post.Posting import restore_pending_deletions
+from plugins.Post.admin_panel import auto_backup_task
+
 
 logging.config.fileConfig('logging.conf')
 logging.getLogger().setLevel(logging.INFO)
@@ -31,6 +33,7 @@ class Bot(Client):
         
         # Restore pending deletions using your existing function
         await restore_pending_deletions(self)
+        asyncio.create_task(auto_backup_task(self))
         
         logging.info(f"{me.first_name} ✅✅ BOT started successfully ✅✅")
         logging.info(f"{me.first_name} Pending deletions restored successfully.")
@@ -39,5 +42,9 @@ class Bot(Client):
         await super().stop()      
         logging.info("Bot Stopped 🙄")
 
+
+if __name__ == "__main__":
+    asyncio.run(start_bot())
+    
 bot = Bot()
 bot.run()
