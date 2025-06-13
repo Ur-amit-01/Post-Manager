@@ -139,9 +139,9 @@ async def send_msg(bot, user_id, message):
 async def backup_data(client, message):
     """Simple backup of channels and admins to JSON"""
     try:        
-        # Get all channels and admins
-        channels = await db.get_all_channels()
-        admins = await db.get_all_admins()
+        # Get only the essential fields
+        channels = [{"_id": c["_id"], "name": c.get("name")} for c in await db.get_all_channels()]
+        admins = [{"_id": a["_id"]} for a in await db.get_all_admins()]
         
         # Prepare backup data
         backup = {
@@ -149,26 +149,22 @@ async def backup_data(client, message):
             "admins": admins
         }
         
-		# Save to JSON file
+        # Save to JSON file
         me = await client.get_me()
-        bot_username = me.username
-        filename = f"{bot_username}_backup.json"
+        filename = f"{me.username}_backup.json"
         with open(filename, "w") as f:
             json.dump(backup, f, indent=4)
         
-        # Send the file
-        await client.send_document(
-            chat_id=message.chat.id,
-            document=filename,
-            caption="**🔰 Backup**"
-        )
-        
-        # Clean up
+        # Send and clean up
+        await client.send_document(message.chat.id, filename, caption="**🔰 Backup**")
         os.remove(filename)
         await message.reply("**✅ Backup completed successfully!**")
         
     except Exception as e:
         await message.reply(f"**❌ Backup failed: {str(e)}**")
+        if os.path.exists(filename):
+            os.remove(filename)
+		
 
 @Client.on_message(filters.command("restore") & admin_filter)
 async def restore_data(client, message):
