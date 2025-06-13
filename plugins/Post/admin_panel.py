@@ -75,10 +75,7 @@ Manage bot admins with the options below:
 """
     buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton("➕ Promote User", callback_data="promote_user"),
-       
-        "1. Use <code>/demote user_id</code>",
-        reply_markup=InlineKeyboardMarkup([
-            InlineKeyboardButton("➖ Demote User", callback_data="demote_user")],
+         InlineKeyboardButton("➖ Demote User", callback_data="demote_user")],
         [InlineKeyboardButton("📜 List Admins", callback_data="list_admins")],
         [InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]
     ])
@@ -89,8 +86,10 @@ Manage bot admins with the options below:
 @Client.on_callback_query(filters.regex("^promote_user$") & admin_filter)
 async def promote_user_callback(client, query: CallbackQuery):
     await query.edit_message_text(
-        "**🔸 To promote a user:**\n"
-        "**1. Use <code>/promote user_id</code>**",
+        "To promote a user:\n\n"
+        "1. Reply to their message with <code>/promote</code>\n"
+        "OR\n"
+        "2. Use <code>/promote user_id</code>",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("🔙 Back", callback_data="admin_management")]
         ])
@@ -98,10 +97,12 @@ async def promote_user_callback(client, query: CallbackQuery):
     await query.answer()
 
 @Client.on_callback_query(filters.regex("^demote_user$") & admin_filter)
-async def promote_user_callback(client, query: CallbackQuery):
+async def demote_user_callback(client, query: CallbackQuery):
     await query.edit_message_text(
-        "**🔸 To demote a user:**\n"
-        "**1. Use <code>/demote user_id</code>**",
+        "To demote a user:\n\n"
+        "1. Reply to their message with <code>/demote</code>\n"
+        "OR\n"
+        "2. Use <code>/demote user_id</code>",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("🔙 Back", callback_data="admin_management")]
         ])
@@ -118,8 +119,8 @@ async def list_admins_callback(client, query: CallbackQuery):
         for admin in admins:
             try:
                 user = await client.get_users(admin["_id"])
-                text += f"🫦 {user.mention} (<code>{user.id}</code>)\n"
-                text += f"🔸 Added: <code>{admin.get('added_at', 'Unknown')}</code>\n\n"
+                text += f"• {user.mention} (<code>{user.id}</code>)\n"
+                text += f"  ⏰ Added: <code>{admin.get('added_at', 'Unknown')}</code>\n\n"
             except:
                 text += f"• Unknown User (<code>{admin['_id']}</code>)\n\n"
     
@@ -137,13 +138,13 @@ async def list_admins_callback(client, query: CallbackQuery):
 async def broadcast_menu(client, query: CallbackQuery):
     total_users = await db.total_users_count()
     text = f"""
-<b>📢 BROADCAST MESSAGE
+<b>📢 BROADCAST MESSAGE</b>
 
-• Current users : <code>{total_users}</code>
+Current subscribers: <code>{total_users}</code>
 
-🔸To send a broadcast:
-1. Reply to any message with /broadcast
-</b>"""
+To send a broadcast:
+1. Reply to any message with <code>/broadcast</code>
+"""
     buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]
     ])
@@ -190,12 +191,12 @@ async def backup_menu(client, query: CallbackQuery):
     text = """
 <b>🔰 BACKUP & RESTORE</b>
 
-• <b>Backup:</b> Creates a JSON file with channels and admins data.
-• <b>Restore:</b> Restores data from a JSON file.
+• <b>Backup:</b> Creates a JSON file with channels and admins data
+• <b>Restore:</b> Restores data from a backup file
 
 Commands:
-• /backup - Create a backup 📩
-• /restore (reply to backup file) - Restore data 🔁
+• <code>/backup</code> - Create a backup
+• <code>/restore</code> (reply to backup file) - Restore data
 """
     buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]
@@ -247,6 +248,65 @@ async def demote_user(client, message):
 
     await db.remove_admin(user_id)
     await message.reply(f"❌ Demoted user {user_id}")
+
+@Client.on_message(filters.command("broadcast") & filters.user(ADMIN) & filters.reply)
+async def broadcast_handler(bot: Client, m: Message):
+    all_users = await db.get_all_users()
+    broadcast_msg = m.reply_to_message
+    sts_msg = await m.reply_text("📢 <b>Broadcast started!</b>")
+    
+    done, failed, success = 0, 0, 0
+    start_time = time.time()
+    total_users = await db.total_users_count()
+
+    async for user in all_users:
+        sts = await send_msg(bot, user['_id'], broadcast_msg)
+        if sts == 200:
+            success += 1
+        else:
+            failed += 1
+        if sts == 400:
+            await db.delete_user(user['_id'])
+
+        done += 1
+        if not done % 20:
+            await sts_msg.edit(
+                f"📊 <b>Broadcast Progress:</b>\n\n"
+                f"👥 Total Users: <code>{total_users}</code>\n"
+                f"✅ Completed: <code>{done}</code> / <code>{total_users}</code>\n"
+                f"✔️ Success: <code>{success}</code>\n"
+                f"❌ Failed: <code>{failed}</code>"
+            )
+
+    completed_in = timedelta(seconds=int(time.time() - start_time))
+    await sts_msg.edit(
+        f"✅ <b>Broadcast Completed!</b>\n\n"
+        f"⏱️ Time taken: <code>{completed_in}</code>\n"
+        f"👥 Total Users: <code>{total_users}</code>\n"
+        f"✅ Completed: <code>{done}</code> / <code>{total_users}</code>\n"
+        f"✔️ Success: <code>{success}</code>\n"
+        f"❌ Failed: <code>{failed}</code>"
+    )
+
+async def send_msg(bot, user_id, message):
+    try:
+        await message.copy(chat_id=int(user_id))
+        return 200
+    except FloodWait as e:
+        await asyncio.sleep(e.value)
+        return await send_msg(bot, user_id, message)
+    except InputUserDeactivated:
+        logger.info(f"{user_id} : deactivated")
+        return 400
+    except UserIsBlocked:
+        logger.info(f"{user_id} : blocked the bot")
+        return 400
+    except PeerIdInvalid:
+        logger.info(f"{user_id} : user id invalid")
+        return 400
+    except Exception as e:
+        logger.error(f"{user_id} : {e}")
+        return 500
 
 @Client.on_message(filters.command("backup") & admin_filter)
 async def backup_data(client, message):
