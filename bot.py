@@ -41,10 +41,6 @@ class Bot(Client):
     async def stop(self, *args):
         await super().stop()      
         logging.info("Bot Stopped 🙄")
-
-
-if __name__ == "__main__":
-    asyncio.run(start_bot())
     
 bot = Bot()
 bot.run()
