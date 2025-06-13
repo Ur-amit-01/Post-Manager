@@ -182,8 +182,8 @@ async def backup_menu(client, query: CallbackQuery):
 • <b>Restore:</b> Restores data from a backup file
 
 <b>🤖 Commands:</b>
-• <code>/backup</code> - Create a backup
-• <code>/restore</code> (reply to backup file) - Restore data
+• /backup - Create a backup
+• /restore (reply to backup file) - Restore data
 """
     buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]
@@ -209,12 +209,12 @@ async def promote_user(client, message):
             return await message.reply("Invalid user ID!")
 
     await db.add_admin(user_id)
-    await message.reply(f"✅ Promoted user {user_id} to admin!")
+    await message.reply(f"**✅ Promoted user {user_id} to admin!**")
 
 @Client.on_message(filters.command("demote") & filters.user(ADMIN))
 async def demote_user(client, message):
     if not message.reply_to_message and len(message.command) < 2:
-        return await message.reply("Reply to a user or use: /demote user_id")
+        return await message.reply("**Reply to a user or use: /demote user_id**")
     
     if message.reply_to_message:
         user_id = message.reply_to_message.from_user.id
@@ -225,66 +225,8 @@ async def demote_user(client, message):
             return await message.reply("Invalid user ID!")
 
     await db.remove_admin(user_id)
-    await message.reply(f"❌ Demoted user {user_id}")
+    await message.reply(f"**❌ Demoted user {user_id}**")
 
-@Client.on_message(filters.command("broadcast") & filters.user(ADMIN) & filters.reply)
-async def broadcast_handler(bot: Client, m: Message):
-    all_users = await db.get_all_users()
-    broadcast_msg = m.reply_to_message
-    sts_msg = await m.reply_text("📢 <b>Broadcast started!</b>")
-    
-    done, failed, success = 0, 0, 0
-    start_time = time.time()
-    total_users = await db.total_users_count()
-
-    async for user in all_users:
-        sts = await send_msg(bot, user['_id'], broadcast_msg)
-        if sts == 200:
-            success += 1
-        else:
-            failed += 1
-        if sts == 400:
-            await db.delete_user(user['_id'])
-
-        done += 1
-        if not done % 20:
-            await sts_msg.edit(
-                f"📊 <b>Broadcast Progress:</b>\n\n"
-                f"👥 Total Users: <code>{total_users}</code>\n"
-                f"✅ Completed: <code>{done}</code> / <code>{total_users}</code>\n"
-                f"✔️ Success: <code>{success}</code>\n"
-                f"❌ Failed: <code>{failed}</code>"
-            )
-
-    completed_in = timedelta(seconds=int(time.time() - start_time))
-    await sts_msg.edit(
-        f"✅ <b>Broadcast Completed!</b>\n\n"
-        f"⏱️ Time taken: <code>{completed_in}</code>\n"
-        f"👥 Total Users: <code>{total_users}</code>\n"
-        f"✅ Completed: <code>{done}</code> / <code>{total_users}</code>\n"
-        f"✔️ Success: <code>{success}</code>\n"
-        f"❌ Failed: <code>{failed}</code>"
-    )
-
-async def send_msg(bot, user_id, message):
-    try:
-        await message.copy(chat_id=int(user_id))
-        return 200
-    except FloodWait as e:
-        await asyncio.sleep(e.value)
-        return await send_msg(bot, user_id, message)
-    except InputUserDeactivated:
-        logger.info(f"{user_id} : deactivated")
-        return 400
-    except UserIsBlocked:
-        logger.info(f"{user_id} : blocked the bot")
-        return 400
-    except PeerIdInvalid:
-        logger.info(f"{user_id} : user id invalid")
-        return 400
-    except Exception as e:
-        logger.error(f"{user_id} : {e}")
-        return 500
 
 @Client.on_message(filters.command("backup") & admin_filter)
 async def backup_data(client, message):
