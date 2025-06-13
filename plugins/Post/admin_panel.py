@@ -66,8 +66,8 @@ async def list_admins(client, message):
             user = await client.get_users(admin["_id"])
             # Extract just the date portion
             added_date = str(admin.get('added_at', 'Unknown')).split()[0] if admin.get('added_at') else 'Unknown'
-            text += f"**• {user.mention} (`{user.id}`)**\n"
-            text += f"**  📅 Added: `{added_date}`**\n\n"
+            text += f"**🫦 {user.mention} (`{user.id}`)**\n"
+            text += f"**📅  Added: `{added_date}`**\n\n"
         except:
             text += f"**• Unknown User (`{admin['_id']}`)**\n\n"
     
