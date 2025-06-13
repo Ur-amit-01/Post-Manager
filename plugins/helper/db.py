@@ -197,5 +197,5 @@ class Database:
     # ============ admin panel Methods ===========
 
             
- Initialize the database
+ #Initialize the database
 db = Database(DB_URL, DB_NAME)
