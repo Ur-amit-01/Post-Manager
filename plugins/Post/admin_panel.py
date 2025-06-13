@@ -52,9 +52,9 @@ async def admin_panel(client, message):
 """
     buttons = InlineKeyboardMarkup([
         [InlineKeyboardButton("👑 Admin Management", callback_data="admin_management")],
-        [InlineKeyboardButton("📢 Broadcast", callback_data="broadcast_menu"),
-         InlineKeyboardButton("📊 Stats", callback_data="stats_menu")],
-        [InlineKeyboardButton("🔰 Backup/Restore", callback_data="backup_menu")]
+        [InlineKeyboardButton("📢 Broadcast", callback_data="admin_broadcast_menu"),
+         InlineKeyboardButton("📊 Stats", callback_data="admin_stats_menu")],
+        [InlineKeyboardButton("🔰 Backup/Restore", callback_data="admin_backup_menu")]
     ])
     
     await message.reply_text(text, reply_markup=buttons)
@@ -129,7 +129,7 @@ async def list_admins_callback(client, query: CallbackQuery):
 
 # ==================================== BROADCAST MENU ====================================
 
-@Client.on_callback_query(filters.regex("^broadcast_menu$") & admin_filter)
+@Client.on_callback_query(filters.regex("^admin_broadcast_menu$") & admin_filter)
 async def broadcast_menu(client, query: CallbackQuery):
     total_users = await db.total_users_count()
     text = f"""
@@ -149,7 +149,7 @@ To send a broadcast:
 
 # ==================================== STATS MENU ====================================
 
-@Client.on_callback_query(filters.regex("^stats_menu$") & admin_filter)
+@Client.on_callback_query(filters.regex("^admin_stats_menu$") & admin_filter)
 async def stats_menu(client, query: CallbackQuery):
     # Calculate bot uptime
     uptime = datetime.now() - START_TIME
@@ -181,7 +181,7 @@ async def stats_menu(client, query: CallbackQuery):
 
 # ==================================== BACKUP/RESTORE MENU ====================================
 
-@Client.on_callback_query(filters.regex("^backup_menu$") & admin_filter)
+@Client.on_callback_query(filters.regex("^admin_backup_menu$") & admin_filter)
 async def backup_menu(client, query: CallbackQuery):
     text = """
 <b>🔰 BACKUP & RESTORE</b>
