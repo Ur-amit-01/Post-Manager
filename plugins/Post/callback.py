@@ -47,20 +47,18 @@ async def cb_handler(client: Client, query: CallbackQuery):
             
             reply_markup = InlineKeyboardMarkup([
                 [InlineKeyboardButton('📜 ᴀʙᴏᴜᴛ', callback_data='about'),
-                 InlineKeyboardButton('🕵🏻‍♀️ ʜᴇʟᴘ', callback_data='help')],
-                [InlineKeyboardButton("⚙️ ᴀᴅᴍɪɴ ᴘᴀɴᴇʟ 🛠️", callback_data="back_to_main")]
+                 InlineKeyboardButton('🕵🏻‍♀️ ʜᴇʟᴘ', callback_data='help')]
             ])
         
         # Main help menu
         elif data == "help":
             txt = MAIN_HELP_TXT
             reply_markup = InlineKeyboardMarkup([
-                [InlineKeyboardButton("ʀᴇǫᴜᴇsᴛ ᴀᴄᴄᴇᴘᴛᴏʀ", callback_data="request")],
-                [InlineKeyboardButton("ʀᴇsᴛʀɪᴄᴛᴇᴅ ᴄᴏɴᴛᴇɴᴛ sᴀᴠᴇʀ", callback_data="restricted")],
+                #[InlineKeyboardButton("ʀᴇǫᴜᴇsᴛ ᴀᴄᴄᴇᴘᴛᴏʀ", callback_data="request")],
+                #[InlineKeyboardButton("ʀᴇsᴛʀɪᴄᴛᴇᴅ ᴄᴏɴᴛᴇɴᴛ sᴀᴠᴇʀ", callback_data="restricted")],
                 [InlineKeyboardButton("📢 Post Help", callback_data="post_help"),
                  InlineKeyboardButton("📋 Channel Help", callback_data="channel_help")],
-                [InlineKeyboardButton("🗑 Delete Help", callback_data="delete_help"),
-                 InlineKeyboardButton("🏠 Home", callback_data="start")]
+                [InlineKeyboardButton("🏠 Home", callback_data="start")]
             ])
         
         # Help sub-menus
@@ -80,8 +78,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
         elif data == "about":
             txt = ABOUT_TXT.format(client.mention)
             reply_markup = InlineKeyboardMarkup([
-                [InlineKeyboardButton("🤖 ᴅᴇᴠᴇʟᴏᴘᴇʀ", url="https://t.me/axa_bachha"),
-                 InlineKeyboardButton("🏠 Home", callback_data="start")]
+                [InlineKeyboardButton("🤖 ᴅᴇᴠᴇʟᴏᴘᴇʀ", url="https://t.me/xdzoddd"),
+                 InlineKeyboardButton("◀️ Back", callback_data="start")]
             ])
         
         elif data == "restricted":
