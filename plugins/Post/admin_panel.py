@@ -26,9 +26,7 @@ admin_filter = filters.create(admins_only)
 
 # ==================================== ADMIN PANEL MAIN MENU ====================================
 
-@Client.on_message(filters.command("admin") & admin_filter)
-async def admin_panel(client, message):
-    # Create admin panel with buttons
+async def show_admin_panel(client, message_or_query):
     text = """
 <b>🤖 ADMIN PANEL
 
@@ -41,15 +39,21 @@ Choose from the options below:
         [InlineKeyboardButton("🔰 Backup/Restore", callback_data="admin_backup_menu")]
     ])
     
-    # For callback queries (navigation)
-    if isinstance(message, CallbackQuery):
-        await message.message.edit_text(text, reply_markup=buttons)
-        await message.answer()
-    # For command (first time opening)
+    if isinstance(message_or_query, CallbackQuery):
+        await message_or_query.edit_message_text(text, reply_markup=buttons)
+        await message_or_query.answer()
     else:
-        if message.chat.type == "private":
-            await message.delete()
-        msg = await message.reply_text(text, reply_markup=buttons)
+        if message_or_query.chat.type == "private":
+            await message_or_query.delete()
+        await message_or_query.reply_text(text, reply_markup=buttons)
+
+@Client.on_message(filters.command("admin") & admin_filter)
+async def admin_panel(client, message):
+    await show_admin_panel(client, message)
+
+@Client.on_callback_query(filters.regex("^back_to_main$") & admin_filter)
+async def back_to_main(client, query: CallbackQuery):
+    await show_admin_panel(client, query)
 
 # ==================================== ADMIN MANAGEMENT ====================================
 
@@ -193,15 +197,6 @@ Commands:
     await query.answer()
 
 # ==================================== BACK BUTTON ====================================
-
-@Client.on_callback_query(filters.regex("^back_to_main$") & admin_filter)
-async def back_to_main(client, query: CallbackQuery):
-    # Reuse the admin_panel function to return to main menu
-    message = query.message
-    message.data = query  # Pass the query as data to identify it's a callback
-    await admin_panel(client, message)
-    await query.answer()
-
 # ==================================== ORIGINAL COMMANDS (KEPT FOR COMPATIBILITY) ====================================
 
 @Client.on_message(filters.command("promote") & filters.user(ADMIN))
