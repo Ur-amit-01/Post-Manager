@@ -46,7 +46,9 @@ async def list_channels(client, message: Message):
         await message.react(emoji=random.choice(REACTIONS), big=True)
     except:
         pass
-
+    if not await db.is_admin(message.from_user.id):
+        await message.reply("**❌ You are not authorized to use this command!**")
+        return
     channels = await db.get_all_channels()
 
     if not channels:
