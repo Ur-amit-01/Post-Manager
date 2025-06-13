@@ -272,7 +272,7 @@ async def handle_deletion_results(client, deletion_tasks, post_id, delay_seconds
 
 
 
-@Client.on_message(filters.command("fpost") & filters.private & filters.user(ADMIN))
+@Client.on_message(filters.command("fpost") & filters.private & admin_filter)
 async def forward_post(client, message: Message):
     try:
         await message.react(emoji=random.choice(REACTIONS), big=True)
