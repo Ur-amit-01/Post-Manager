@@ -20,10 +20,11 @@ ADMIN_PREFIXES = {
     "backup_",
     "restore_",
     "broadcast_",
-    "stats_"
+    "stats_",
+    "back_"
 }
 
-@Client.on_callback_query(filters.regex(r'^(?!admin_|promote_|demote_|list_|backup_|restore_|broadcast_|stats_).*'))
+@Client.on_callback_query(filters.regex(r'^(?!admin_|promote_|demote_|list_|backup_|restore_|broadcast_|stats_|back_).*'))
 async def cb_handler(client: Client, query: CallbackQuery):
     try:
         data = query.data
