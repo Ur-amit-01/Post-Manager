@@ -41,9 +41,9 @@ async def cb_handler(client: Client, query: CallbackQuery):
             
         # Start menu
         elif data == "start":
-            txt = f"> **✨👋🏻 Hey {query.from_user.mention} !!**\n" \
+            txt = f"> **✨👋🏻 Hey {query.from_user.mention} !!**\n\n" \
                   f"**Welcome to the Channel Manager Bot, Manage multiple channels and post messages with ease! 😌**\n\n" \
-                  f"> **ᴅᴇᴠᴇʟᴏᴘᴇʀ �🏻‍💻 :- @Axa_bachha**"
+                  f"> **ᴅᴇᴠᴇʟᴏᴘᴇʀ 🧑🏻‍💻 :- @xDzoddd**"
             
             reply_markup = InlineKeyboardMarkup([
                 [InlineKeyboardButton('📜 ᴀʙᴏᴜᴛ', callback_data='about'),
