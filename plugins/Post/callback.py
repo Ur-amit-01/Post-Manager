@@ -179,4 +179,5 @@ async def handle_delete_post(client: Client, query: CallbackQuery):
             f"❌ <b>Deletion Failed</b>\n\n"
             f"• <b>Error:</b> {str(e)}\n"
             f"• Please try again or check logs"
+        )
       
