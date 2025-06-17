@@ -8,7 +8,6 @@ logging.config.fileConfig('logging.conf')
 logging.getLogger().setLevel(logging.INFO)
 logging.getLogger("pyrogram").setLevel(logging.ERROR)
 
-
 class Bot(Client):
 
     def __init__(self):
@@ -28,10 +27,7 @@ class Bot(Client):
         self.mention = me.mention
         self.username = me.username
         
-        # Start web server
-
-        
-        
+        # Start web serve       
         logging.info(f"{me.first_name} ✅✅ BOT started successfully ✅✅")
 
     async def stop(self, *args):
