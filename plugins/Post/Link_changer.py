@@ -7,7 +7,6 @@ import asyncio
 import random
 import re
 from plugins.helper.db import db
-from plugins.Extra.wallpaper import get_random_wallpaper
 
 QUALITIES = {
     "240p": "240",
