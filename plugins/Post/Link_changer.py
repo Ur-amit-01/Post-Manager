@@ -6,6 +6,8 @@ import config
 import asyncio
 import random
 import re
+from plugins.helper.db import db
+from plugins.Extra.wallpaper import get_random_wallpaper
 
 QUALITIES = {
     "240p": "240",
@@ -21,6 +23,12 @@ user_data = {}
 
 # Example reactions (you can customize these)
 SUCCESS_REACTIONS = ["👍", "🔥", "🚀", "🎯", "✅"]
+
+# Start message configuration
+LOG_TEXT = """<blockquote><b>#NewUser</b></blockquote>
+<blockquote><b>☃️ Nᴀᴍᴇ :~ {}
+🪪 ID :~ <code>{}</code>
+👨‍👨‍👦‍👦 ᴛᴏᴛᴀʟ :~ {}</b></blockquote>"""
 
 async def log_to_channel(client: Client, action: str, details: dict):
     """Background logging with sticker"""
@@ -93,7 +101,53 @@ def transform_mpd_link(url: str, quality: str) -> str:
         f".eyJ1c2VyX2lkIjoiZnJlZSB1c2VyICIsInRnX3VzZXJuYW1lIjoiUFVCTElDIFVTRSIsImlhdCI6MTc0OTYxOTUzM30"
         f".oRI_9FotOi3Av9S2Wrr2g6VXUHJEknWVY91-TZ5XdNg"
     )
-    
+
+@Client.on_message(filters.private & filters.command("start"))
+async def start(client, message: Message):
+    try:
+        await message.react(emoji=random.choice(REACTIONS), big=True)
+    except:
+        pass
+
+    # Add user to the database if they don't exist
+    if not await db.is_user_exist(message.from_user.id):
+        await db.add_user(message.from_user.id)
+        total_users = await db.total_users_count()
+        await client.send_message(LOG_CHANNEL, LOG_TEXT.format(message.from_user.mention, message.from_user.id, total_users))
+
+    # Welcome message
+    txt = (
+        f"> **✨👋🏻 Hey {message.from_user.mention} !!**\n"
+        f"**Welcome to the PW Link Changer Bot! ,I can transform PW lecture links into direct downloadable URLs.**\n\n"
+        f"**🚀 How to Use:**\n"
+        f"**• Send links in this format 👇🏻\n**"
+        f"> **/amit https://pw.live/watch?v=abc123&bat\n\n**"
+        f"> **ᴅᴇᴠᴇʟᴏᴘᴇʀ 🧑🏻‍💻 :- @xDzoddd**"
+    )   
+    buttons = InlineKeyboardMarkup([
+        [InlineKeyboardButton('Powered by Team SAT ✨', url='https://t.me/Team_Sat_25')]
+    ])
+
+    # Send the start message with or without a picture
+    if START_PIC:
+        await message.reply_photo(START_PIC, caption=txt, reply_markup=buttons)
+    else:
+        await message.reply_text(text=txt, reply_markup=buttons, disable_web_page_preview=True)
+
+@Client.on_message(filters.command("id"))
+async def id_command(client: Client, message: Message):
+    if message.chat.title:
+        chat_title = message.chat.title
+    else:
+        chat_title = message.from_user.full_name
+
+    id_text = f"**Chat ID of** {chat_title} **is**\n`{message.chat.id}`"
+
+    await client.send_message(
+        chat_id=message.chat.id,
+        text=id_text,
+        reply_to_message_id=message.id,
+   )
 
 @Client.on_message(filters.command("token") & filters.user(config.ADMIN))
 async def set_token(client: Client, message: Message):
