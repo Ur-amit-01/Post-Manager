@@ -14,8 +14,9 @@ from plugins.Post.admin_panel import admin_filter
 
 @Client.on_message(filters.command("genlink") & filters.private & admin_filter)
 async def generate_invite_links(client, message: Message):
-    # Parse time argument (e.g. "/genlink 10m")
+    # Parse time argument
     expire_time = None
+    time_suffix = ""
     if len(message.command) > 1:
         time_arg = message.command[1].lower()
         if match := re.match(r"^(\d+)([mhd])$", time_arg):
@@ -23,95 +24,93 @@ async def generate_invite_links(client, message: Message):
             num = int(num)
             if unit == 'm':
                 expire_time = timedelta(minutes=num)
+                time_suffix = f"⏳ Expires in {num} minutes"
             elif unit == 'h':
                 expire_time = timedelta(hours=num)
+                time_suffix = f"⏳ Expires in {num} hours"
             elif unit == 'd':
                 expire_time = timedelta(days=num)
+                time_suffix = f"⏳ Expires in {num} days"
 
-    channels = await db.get_all_channels()
-    
+    # Initial processing message
+    processing_msg = await message.reply("🔄 <b>Generating fresh links...</b>")
+
     # Generate links
     links = {}
-    for channel in channels:
+    success_count = 0
+    for channel in await db.get_all_channels():
         try:
             invite = await client.create_chat_invite_link(
                 chat_id=channel['_id'],
-                name=f"BotGen_{datetime.now().strftime('%Y%m%d')}",
+                name=f"Link_{datetime.now().strftime('%m%d%H%M')}",
                 expire_date=datetime.now() + expire_time if expire_time else None
             )
             links[channel['_id']] = {
                 'link': invite.invite_link,
-                'name': channel['name'],
-                'revoke_token': invite.invite_link.split('/')[-1]  # Extract unique part
+                'name': channel['name']
             }
+            success_count += 1
         except Exception as e:
-            print(f"Error generating link for {channel['name']}: {e}")
+            print(f"Error in {channel['name']}: {str(e)}")
 
-    # Send results with revoke button
-    text = "**Generated Links**\n\n" + "\n".join(
-        f"🔗 [{info['name']}]({info['link']})" + 
-        (f" (expires in {expire_time})" if expire_time else "")
-        for _, info in links.items()
+    # Prepare response
+    header = (
+        f"✨ <b>Generated Fresh links for {success_count} channels.</b>\n"
+        f"{time_suffix}\n\n"
+    )
+    
+    channel_links = "\n".join(
+        f"• <a href='{info['link']}'><b>{info['name']}</b></a>"
+        for info in links.values()
     )
 
-    reply_markup = None
-    if links:
-        reply_markup = InlineKeyboardMarkup([[
-            InlineKeyboardButton("❌ Revoke All Links", callback_data="revoke_all")
-        ]])
+    footer = (
+        "\n\n**⚠️ <i>These links will be automatically revoked when:</i>**\n"
+        "**- You generate new links**\n"
+        "**- They expire (if time set)**\n"
+        "**- You click 'Revoke Now'**"
+    ) if links else ""
 
+    # Create buttons
+    buttons = []
+    if links:
+        buttons.append([InlineKeyboardButton("🔴 Revoke Now", callback_data="revoke_all")])
+    
+    await processing_msg.delete()
     await message.reply(
-        text,
-        reply_markup=reply_markup,
+        header + channel_links + footer,
+        reply_markup=InlineKeyboardMarkup(buttons) if buttons else None,
         disable_web_page_preview=True
     )
 
-    # Store links for possible revocation
-    if hasattr(client, 'generated_links'):
-        client.generated_links.update(links)
-    else:
-        client.generated_links = links
+    # Store links
+    client.generated_links = links
 
-    # Schedule auto-revocation if time specified
+    # Schedule auto-revocation
     if expire_time:
         asyncio.create_task(auto_revoke_links(client, links, expire_time))
 
-async def auto_revoke_links(client, links, delay):
-    await asyncio.sleep(delay.total_seconds())
-    for channel_id, info in links.items():
-        try:
-            await client.revoke_chat_invite_link(
-                chat_id=channel_id,
-                invite_link=info['link']
-            )
-            print(f"Auto-revoked link for {info['name']}")
-        except Exception as e:
-            print(f"Error revoking link for {info['name']}: {e}")
-
 @Client.on_callback_query(filters.regex("^revoke_all$"))
 async def revoke_all_links(client, callback_query: CallbackQuery):
-    if not hasattr(client, 'generated_links') or not client.generated_links:
-        await callback_query.answer("No active links to revoke!", show_alert=True)
+    if not hasattr(client, 'generated_links'):
+        await callback_query.answer("❌ No active links found!", show_alert=True)
         return
 
-    await callback_query.answer("Revoking all links...")
+    await callback_query.answer("⏳ Revoking links...")
     
-    success = failed = 0
-    for channel_id, info in client.generated_links.items():
+    revoked = 0
+    for chat_id, info in client.generated_links.items():
         try:
-            await client.revoke_chat_invite_link(
-                chat_id=channel_id,
-                invite_link=info['link']
-            )
-            success += 1
-        except Exception as e:
-            print(f"Error revoking {info['name']}: {e}")
-            failed += 1
+            await client.revoke_chat_invite_link(chat_id, info['link'])
+            revoked += 1
+        except:
+            continue
 
-    await callback_query.message.reply(
-        f"🔒 Revoked {success} links\n"
-        f"⚠️ Failed to revoke {failed} links"
+    # Update original message
+    await callback_query.message.edit_text(
+        f"✅ <b>Revoked {revoked} links</b>\n"
+        f"**All previous links are now invalid**",
+        reply_markup=None
     )
     
-    # Clear stored links
-    client.generated_links.clear()
+    del client.generated_links
