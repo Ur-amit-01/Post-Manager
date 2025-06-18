@@ -91,11 +91,18 @@ def transform_mpd_link(url: str, quality: str) -> str:
     parent_id = params.get('parentId', [''])[0]
     
     if not child_id or not parent_id:
+        # Try to extract from path if not in query params
+        path_parts = parsed.path.split('/')
+        if len(path_parts) > 1:
+            parent_id = path_parts[-2]  # Second last part of path often contains parent ID
+    
+    if not child_id or not parent_id:
         return "Error: Could not extract required parameters from the MPD link."
+        
     return (
         f"http://master-api-v3.vercel.app/pw/m3u8v2?"
-        f"childId={params.get('scheduleId', [''])[0]}&"
-        f"parentId={params.get('batchSlug', [''])[0]}&"
+        f"childId={child_id}&"
+        f"parentId={parent_id}&"
         f"token={token}&q={quality}&authorization=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
         f".eyJ1c2VyX2lkIjoiZnJlZSB1c2VyICIsInRnX3VzZXJuYW1lIjoiUFVCTElDIFVTRSIsImlhdCI6MTc0OTYxOTUzM30"
         f".oRI_9FotOi3Av9S2Wrr2g6VXUHJEknWVY91-TZ5XdNg"
@@ -104,7 +111,7 @@ def transform_mpd_link(url: str, quality: str) -> str:
 @Client.on_message(filters.private & filters.command("start"))
 async def start(client, message: Message):
     try:
-        await message.react(emoji=random.choice(REACTIONS), big=True)
+        await message.react(emoji=random.choice(SUCCESS_REACTIONS), big=True)
     except:
         pass
 
@@ -112,7 +119,7 @@ async def start(client, message: Message):
     if not await db.is_user_exist(message.from_user.id):
         await db.add_user(message.from_user.id)
         total_users = await db.total_users_count()
-        await client.send_message(LOG_CHANNEL, LOG_TEXT.format(message.from_user.mention, message.from_user.id, total_users))
+        await client.send_message(config.LOG_CHANNEL, LOG_TEXT.format(message.from_user.mention, message.from_user.id, total_users))
 
     # Welcome message
     txt = (
@@ -121,6 +128,8 @@ async def start(client, message: Message):
         f"**🚀 How to Use:**\n"
         f"**• Send links in this format 👇🏻\n**"
         f"> **/amit https://pw.live/watch?v=abc123&bat\n\n**"
+        f"> **or**\n"
+        f"> **/amit https://d1d34p8vz63oiq.cloudfront.net/.../master.mpd?childId=...&parentId=...\n\n**"
         f"> **ᴅᴇᴠᴇʟᴏᴘᴇʀ 🧑🏻‍💻 :- @xDzoddd**"
     )   
     buttons = InlineKeyboardMarkup([
@@ -128,8 +137,8 @@ async def start(client, message: Message):
     ])
 
     # Send the start message with or without a picture
-    if START_PIC:
-        await message.reply_photo(START_PIC, caption=txt, reply_markup=buttons)
+    if config.START_PIC:
+        await message.reply_photo(config.START_PIC, caption=txt, reply_markup=buttons)
     else:
         await message.reply_text(text=txt, reply_markup=buttons, disable_web_page_preview=True)
 
@@ -196,7 +205,7 @@ async def handle_amit_command(client: Client, message: Message):
     user_id = message.from_user.id
     
     # If only /amit is sent
-    if text == "/amit":
+    if text.split()[0] in ["/amit", "/tawheed", "/twhd", "/kabir", "/batman"] and len(text.split()) == 1:
         example_text = (
             "> **Send links in this format 👇🏻**\n"
             "> **/amit https://pw.live/watch?v=abc123&bat**\n"
@@ -206,10 +215,13 @@ async def handle_amit_command(client: Client, message: Message):
         await message.reply_text(example_text)
         return
     
+    # Extract URL from command
+    url = text.split(maxsplit=1)[1] if len(text.split()) > 1 else ""
+    
     # Check for PW Live link
-    if "pw.live/watch" in text:
+    if "pw.live/watch" in url:
         user_data[user_id] = {
-            "url": text.replace("/amit", "").strip(),
+            "url": url,
             "link_type": "pw_live"
         }
         await message.reply_text(
@@ -220,9 +232,9 @@ async def handle_amit_command(client: Client, message: Message):
             ])
         )
     # Check for MPD link
-    elif "d1d34p8vz63oiq.cloudfront.net" in text and "master.mpd" in text:
+    elif "d1d34p8vz63oiq.cloudfront.net" in url and ("master.mpd" in url or ".mpd" in url):
         user_data[user_id] = {
-            "url": text.replace("/amit", "").strip(),
+            "url": url,
             "link_type": "mpd"
         }
         await message.reply_text(
