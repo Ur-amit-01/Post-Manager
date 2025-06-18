@@ -56,7 +56,7 @@ async def generate_invite_links(client, message: Message):
     # Prepare response
     header = (
         f"✨ <b>Generated Fresh links for {success_count} channels.</b>\n"
-        f"{time_suffix}\n\n"
+        f"**{time_suffix}**\n\n"
     )
     
     channel_links = "\n".join(
