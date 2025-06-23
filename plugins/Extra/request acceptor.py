@@ -96,18 +96,22 @@ async def accept(client, message):
             pass
         await acc.stop()
 
-
 @Client.on_chat_join_request(filters.group | filters.channel)
 async def approve_new(client, m):
     if not NEW_REQ_MODE:
-        return  # If NEW_REQ_MODE is False, the function exits without processing the join request.
+        return  # Exit if NEW_REQ_MODE is False
 
     try:
         await client.approve_chat_join_request(m.chat.id, m.from_user.id)
         try:
             await client.send_message(
                 m.from_user.id,
-                f"**• Hello {m.from_user.mention}! 👋🏻\n• Your request for {m.chat.title} is accepted.**"
+                f"**• Hello {m.from_user.mention}! 👋🏻\n• Your request for {m.chat.title} is accepted.**",
+                reply_markup=InlineKeyboardMarkup(
+                    [
+                        [InlineKeyboardButton("Team SAT 💫", url="https://t.me/Team_SAT_25")]
+                    ]
+                )
             )
         except:
             pass
