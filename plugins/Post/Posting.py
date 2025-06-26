@@ -11,7 +11,7 @@ from plugins.Post.admin_panel import admin_filter
 async def restore_pending_deletions(client):
     """Restore pending deletions when bot starts"""
     try:
-        pending_posts = await db.get_pending_deletions()  # You need to implement this in your db.py
+        pending_posts = await db.get_pending_deletions()
         now = time.time()
         
         for post in pending_posts:
@@ -86,6 +86,7 @@ async def send_post(client, message: Message):
     sent_messages = []
     success_count = 0
     total_channels = len(channels)
+    failed_channels = []
 
     processing_msg = await message.reply(
         f"**📢 Posting to {total_channels} channels...**",
@@ -124,7 +125,13 @@ async def send_post(client, message: Message):
                 )
                 
         except Exception as e:
-            print(f"Error posting to channel {channel['_id']}: {e}")
+            error_msg = str(e)[:200]  # Truncate long error messages
+            print(f"Error posting to channel {channel['_id']}: {error_msg}")
+            failed_channels.append({
+                "channel_id": channel["_id"],
+                "channel_name": channel.get("name", str(channel["_id"])),
+                "error": error_msg
+            })
 
     # Save post with deletion info if needed
     post_data = {
@@ -151,8 +158,14 @@ async def send_post(client, message: Message):
         time_str = format_time(delete_after)
         result_msg += f"• <b>Auto-delete in:</b> {time_str}\n"
 
-    if success_count < total_channels:
-        result_msg += f"• <b>Failed:</b> {total_channels - success_count} channels\n"
+    if failed_channels:
+        result_msg += f"• <b>Failed:</b> {len(failed_channels)} channels\n\n"
+        if len(failed_channels) <= 10:
+            result_msg += "<b>Failed Channels:</b>\n"
+            for idx, channel in enumerate(failed_channels, 1):
+                result_msg += f"{idx}. {channel['channel_name']} - {channel['error']}\n"
+        else:
+            result_msg += "<i>Too many failed channels to display (see logs for details)</i>\n"
 
     reply_markup = InlineKeyboardMarkup([
         [InlineKeyboardButton("🗑 Delete This Post", callback_data=f"delete_{post_id}")]
@@ -161,13 +174,24 @@ async def send_post(client, message: Message):
     await processing_msg.edit_text(result_msg, reply_markup=reply_markup)
 
     try:
+        log_msg = (
+            f"📢 <blockquote><b>#Post | @Interferons_bot</b></blockquote>\n\n"
+            f"👤 <b>Posted By:</b> {message.from_user.mention}\n"
+            f"📌 <b>Post ID:</b> <code>{post_id}</code>\n"
+            f"📡 <b>Sent to:</b> {success_count}/{total_channels} channels\n"
+            f"⏳ <b>Auto-delete:</b> {time_str if delete_after else 'No'}\n"
+        )
+        
+        if failed_channels:
+            log_msg += f"\n❌ <b>Failed Channels ({len(failed_channels)}):</b>\n"
+            for channel in failed_channels[:15]:  # Show up to 15 in logs
+                log_msg += f"  - {channel['channel_name']}: {channel['error']}\n"
+            if len(failed_channels) > 15:
+                log_msg += f"  ...and {len(failed_channels)-15} more"
+        
         await client.send_message(
             chat_id=LOG_CHANNEL,
-            text=f"📢 <blockquote><b>#Post | @Interferons_bot</b></blockquote>\n\n"
-                 f"👤 <b>Posted By:</b> {message.from_user.mention}\n"
-                 f"📌 <b>Post ID:</b> <code>{post_id}</code>\n"
-                 f"📡 <b>Sent to:</b> {success_count}/{total_channels} channels\n"
-                 f"⏳ <b>Auto-delete:</b> {time_str if delete_after else 'No'}"
+            text=log_msg
         )    
     except Exception as e:
         print(f"Error sending confirmation to log channel: {e}")
@@ -192,7 +216,6 @@ async def schedule_deletion(client, channel_id, message_id, delay_seconds, user_
             message_ids=message_id
         )
         
-        # Remove from database after successful deletion
         await db.remove_channel_post(post_id, channel_id)
         
         return {
@@ -222,6 +245,7 @@ async def handle_deletion_results(client, deletion_tasks, post_id, delay_seconds
         failed_count = 0
         user_id = None
         confirmation_msg_id = None
+        failed_deletions = []
         
         for result in results:
             if isinstance(result, Exception):
@@ -236,6 +260,7 @@ async def handle_deletion_results(client, deletion_tasks, post_id, delay_seconds
                 success_count += 1
             else:
                 failed_count += 1
+                failed_deletions.append(result)
         
         if user_id:
             if success_count > 0 and confirmation_msg_id:
@@ -250,18 +275,21 @@ async def handle_deletion_results(client, deletion_tasks, post_id, delay_seconds
             message_text = (
                 f"<blockquote>🗑 <b>Post Auto-Deleted</b></blockquote>\n\n"
                 f"• <b>Post ID:</b> <code>{post_id}</code>\n"
-                f"• <b>Deleted from: {success_count} channel(s)</b>\n"
+                f"• <b>Deleted from:</b> {success_count} channel(s)\n"
             )
             
-            if failed_count > 0:
+            if failed_deletions:
                 message_text += f"• <b>Failed to delete from:</b> {failed_count} channel(s)\n"
+                if len(failed_deletions) <= 5:
+                    message_text += "\n<b>Failed Channels:</b>\n"
+                    for idx, fail in enumerate(failed_deletions, 1):
+                        message_text += f"{idx}. {fail['channel_name']} - {fail.get('error', 'Unknown error')}\n"
             
             try:
                 await client.send_message(user_id, message_text)
             except:
                 pass
 
-        # Cleanup complete post if all channels deleted
         if success_count > 0:
             remaining_channels = await db.get_post_channels(post_id)
             if not remaining_channels:
@@ -269,8 +297,6 @@ async def handle_deletion_results(client, deletion_tasks, post_id, delay_seconds
                 
     except Exception as e:
         print(f"Error in handle_deletion_results: {e}")
-
-
 
 @Client.on_message(filters.command("fpost") & filters.private & admin_filter)
 async def forward_post(client, message: Message):
@@ -307,6 +333,7 @@ async def forward_post(client, message: Message):
     sent_messages = []
     success_count = 0
     total_channels = len(channels)
+    failed_channels = []
 
     processing_msg = await message.reply(
         f"**📢 Forwarding to {total_channels} channels...**",
@@ -317,7 +344,6 @@ async def forward_post(client, message: Message):
     
     for channel in channels:
         try:
-            # Using forward_message instead of copy_message to preserve forward tag
             sent_message = await client.forward_messages(
                 chat_id=channel["_id"],
                 from_chat_id=message.chat.id,
@@ -346,16 +372,21 @@ async def forward_post(client, message: Message):
                 )
                 
         except Exception as e:
-            print(f"Error forwarding to channel {channel['_id']}: {e}")
+            error_msg = str(e)[:200]  # Truncate long error messages
+            print(f"Error forwarding to channel {channel['_id']}: {error_msg}")
+            failed_channels.append({
+                "channel_id": channel["_id"],
+                "channel_name": channel.get("name", str(channel["_id"])),
+                "error": error_msg
+            })
 
-    # Save post with deletion info if needed
     post_data = {
         "post_id": post_id,
         "channels": sent_messages,
         "user_id": message.from_user.id,
         "confirmation_msg_id": processing_msg.id,
         "created_at": time.time(),
-        "is_forward": True  # Mark as forwarded post
+        "is_forward": True
     }
     
     if delete_after:
@@ -374,8 +405,14 @@ async def forward_post(client, message: Message):
         time_str = format_time(delete_after)
         result_msg += f"• <b>Auto-delete in:</b> {time_str}\n"
 
-    if success_count < total_channels:
-        result_msg += f"• <b>Failed:</b> {total_channels - success_count} channels\n"
+    if failed_channels:
+        result_msg += f"• <b>Failed:</b> {len(failed_channels)} channels\n\n"
+        if len(failed_channels) <= 10:
+            result_msg += "<b>Failed Channels:</b>\n"
+            for idx, channel in enumerate(failed_channels, 1):
+                result_msg += f"{idx}. {channel['channel_name']} - {channel['error']}\n"
+        else:
+            result_msg += "<i>Too many failed channels to display (see logs for details)</i>\n"
 
     reply_markup = InlineKeyboardMarkup([
         [InlineKeyboardButton("🗑 Delete This Post", callback_data=f"delete_{post_id}")]
@@ -384,13 +421,24 @@ async def forward_post(client, message: Message):
     await processing_msg.edit_text(result_msg, reply_markup=reply_markup)
 
     try:
+        log_msg = (
+            f"📢 <blockquote><b>#FPost | @Interferons_bot</b></blockquote>\n\n"
+            f"👤 <b>Forwarded By:</b> {message.from_user.mention}\n"
+            f"📌 <b>Post ID:</b> <code>{post_id}</code>\n"
+            f"📡 <b>Sent to:</b> {success_count}/{total_channels} channels\n"
+            f"⏳ <b>Auto-delete:</b> {time_str if delete_after else 'No'}\n"
+        )
+        
+        if failed_channels:
+            log_msg += f"\n❌ <b>Failed Channels ({len(failed_channels)}):</b>\n"
+            for channel in failed_channels[:15]:
+                log_msg += f"  - {channel['channel_name']}: {channel['error']}\n"
+            if len(failed_channels) > 15:
+                log_msg += f"  ...and {len(failed_channels)-15} more"
+        
         await client.send_message(
             chat_id=LOG_CHANNEL,
-            text=f"📢 <blockquote><b>#FPost | @Interferons_bot</b></blockquote>\n\n"
-                 f"👤 <b>Forwarded By:</b> {message.from_user.mention}\n"
-                 f"📌 <b>Post ID:</b> <code>{post_id}</code>\n"
-                 f"📡 <b>Sent to:</b> {success_count}/{total_channels} channels\n"
-                 f"⏳ <b>Auto-delete:</b> {time_str if delete_after else 'No'}"
+            text=log_msg
         )    
     except Exception as e:
         print(f"Error sending confirmation to log channel: {e}")
@@ -404,4 +452,3 @@ async def forward_post(client, message: Message):
                 delay_seconds=delete_after
             )
 	)
-	    
