@@ -41,10 +41,9 @@ class Bot(Client):
             try:
                 await self.send_message(
                     admin_id,
-                    "**⚡Back online, baby 💋**\n"
-                    "_Don’t even think about using another bot... I'm all yours! 😤❤️_",
-                    parse_mode="markdown"
-                )
+                    "**Back online, baby 🎀🥹**\n"
+                    "**Don’t even think about using another bot... I'm all yours! 😤❤️**")
+                
             except Exception as e:
                 logging.warning(f"Failed to send restart notification to {admin_id}: {e}")
 
