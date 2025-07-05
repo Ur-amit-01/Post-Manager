@@ -1,16 +1,16 @@
+import os
 import logging
 import logging.config
-from pyrogram import Client 
+from pyrogram import Client
 from config import *
-from aiohttp import web
 from plugins.Post.Posting import restore_pending_deletions
 
-AMIT = os.environ.get("AMIT", "2031106491")
+# Support multiple admin IDs
+ADMIN_IDS = [int(x) for x in os.environ.get("AMIT", "2031106491").split()]
 
 logging.config.fileConfig('logging.conf')
 logging.getLogger().setLevel(logging.INFO)
 logging.getLogger("pyrogram").setLevel(logging.ERROR)
-
 
 class Bot(Client):
     def __init__(self):
@@ -23,30 +23,33 @@ class Bot(Client):
             plugins={"root": "plugins"},
             sleep_threshold=5,
         )
-        self.admin_panel = None  # Initialize as None first  
+        self.admin_panel = None  # Initialize as None first
 
-	async def start(self):
+    async def start(self):
         await super().start()
         me = await self.get_me()
         self.mention = me.mention
         self.username = me.username
 
-        # Restore pending deletions
         await restore_pending_deletions(self)
 
-        # Logging
         logging.info(f"{me.first_name} ✅✅ BOT started successfully ✅✅")
         logging.info(f"{me.first_name} Pending deletions restored successfully.")
 
         # Notify admins
-        for admin_id in AMIT:
+        for admin_id in ADMIN_IDS:
             try:
-                await self.send_message(admin_id, f"f"**⚡Back online, baby 💋\nDon’t even think about using another bot... I'm all yours! 😤❤️**"")
+                await self.send_message(
+                    admin_id,
+                    "**⚡Back online, baby 💋**\n"
+                    "_Don’t even think about using another bot... I'm all yours! 😤❤️_",
+                    parse_mode="markdown"
+                )
             except Exception as e:
                 logging.warning(f"Failed to send restart notification to {admin_id}: {e}")
 
-	async def stop(self, *args):
-        await super().stop()      
+    async def stop(self, *args):
+        await super().stop()
         logging.info("Bot Stopped 🙄")
 
 bot = Bot()
