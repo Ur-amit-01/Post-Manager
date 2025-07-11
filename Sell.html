@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEET ULTIMATE COMBO - Limited Time Offer</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Modern Vibrant Styles */
+        :root {
+            --primary: #6C63FF;
+            --secondary: #FF6584;
+            --dark: #1A1A2E;
+            --light: #F8F9FA;
+            --success: #28A745;
+            --warning: #FF9F1C;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Poppins', sans-serif;
+        }
+        
+        body {
+            background-color: #F5F7FF;
+            color: var(--dark);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        /* Header with Countdown */
+        header {
+            background: linear-gradient(135deg, var(--primary), #8A82FF);
+            color: white;
+            padding: 15px 0;
+            box-shadow: 0 4px 20px rgba(108, 99, 255, 0.3);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+        }
+        
+        .logo i {
+            margin-right: 10px;
+            color: var(--secondary);
+        }
+        
+        .countdown {
+            background: rgba(0,0,0,0.2);
+            padding: 8px 15px;
+            border-radius: 50px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+        }
+        
+        .countdown i {
+            margin-right: 8px;
+            animation: pulse 1.5s infinite;
+        }
+        
+        /* Hero Section */
+        .hero {
+            padding: 60px 0 40px;
+            background: linear-gradient(135deg, #F5F7FF 0%, #E6E9FF 100%);
+            text-align: center;
+            position: relative;
+        }
+        
+        .hero h1 {
+            font-size: 42px;
+            margin-bottom: 15px;
+            font-weight: 800;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .hero p.subtitle {
+            font-size: 20px;
+            color: #555;
+            margin-bottom: 30px;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .offer-badge {
+            background: var(--secondary);
+            color: white;
+            padding: 8px 20px;
+            border-radius: 50px;
+            font-weight: 700;
+            display: inline-block;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 15px rgba(255, 101, 132, 0.4);
+            animation: pulse 2s infinite;
+        }
+        
+        /* Product Section */
+        .product-section {
+            padding: 40px 0 80px;
+        }
+        
+        .product-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            max-width: 900px;
+            margin: 0 auto;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .product-image {
+            height: 250px;
+            background: linear-gradient(45deg, #6C63FF, #8A82FF);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            position: relative;
+        }
+        
+        .product-image-content {
+            text-align: center;
+            z-index: 2;
+            padding: 20px;
+        }
+        
+        .product-image h2 {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+        
+        .product-image p {
+            font-size: 18px;
+            opacity: 0.9;
+        }
+        
+        .product-badge {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: var(--warning);
+            color: var(--dark);
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-weight: 700;
+            font-size: 14px;
+        }
+        
+        .product-content {
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .price-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+        
+        .current-price {
+            font-size: 42px;
+            font-weight: 800;
+            color: var(--primary);
+        }
+        
+        .original-price {
+            font-size: 24px;
+            color: #999;
+            text-decoration: line-through;
+            margin-left: 15px;
+        }
+        
+        .discount-badge {
+            background: var(--secondary);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-weight: 700;
+            margin-left: 15px;
+            font-size: 18px;
+        }
+        
+        .features-list {
+            margin: 25px 0;
+        }
+        
+        .features-list li {
+            list-style: none;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            align-items: center;
+        }
+        
+        .features-list li:last-child {
+            border-bottom: none;
+        }
+        
+        .features-list li i {
+            color: var(--primary);
+            margin-right: 10px;
+            font-size: 18px;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            color: white;
+            padding: 18px 30px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 20px;
+            text-align: center;
+            margin-top: 20px;
+            box-shadow: 0 10px 20px rgba(108, 99, 255, 0.3);
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+        }
+        
+        .cta-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 25px rgba(108, 99, 255, 0.4);
+        }
+        
+        .guarantee-badge {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 20px;
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .guarantee-badge i {
+            color: var(--success);
+            margin-right: 8px;
+            font-size: 20px;
+        }
+        
+        /* Timer Section */
+        .timer-section {
+            background: var(--dark);
+            color: white;
+            padding: 30px 0;
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .timer-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .timer-box {
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 15px 20px;
+            min-width: 80px;
+        }
+        
+        .timer-value {
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+        
+        .timer-label {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+        
+        /* Recent Purchases */
+        .purchases-notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            padding: 15px;
+            max-width: 300px;
+            transform: translateX(150%);
+            animation: slideIn 0.5s forwards;
+            z-index: 1000;
+        }
+        
+        @keyframes slideIn {
+            0% { transform: translateX(150%); }
+            100% { transform: translateX(0); }
+        }
+        
+        .purchase-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .purchase-item:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+        
+        .purchase-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #eee;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 10px;
+            color: var(--primary);
+            font-weight: bold;
+        }
+        
+        .purchase-info {
+            flex: 1;
+        }
+        
+        .purchase-info h4 {
+            font-size: 14px;
+            margin-bottom: 2px;
+        }
+        
+        .purchase-info p {
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .purchase-time {
+            font-size: 10px;
+            color: #999;
+            text-align: right;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header-container {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .countdown {
+                margin-top: 10px;
+            }
+            
+            .hero h1 {
+                font-size: 32px;
+            }
+            
+            .hero p.subtitle {
+                font-size: 18px;
+            }
+            
+            .product-image {
+                height: 200px;
+            }
+            
+            .current-price {
+                font-size: 36px;
+            }
+            
+            .original-price {
+                font-size: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header with Countdown -->
+    <header>
+        <div class="container header-container">
+            <div class="logo">
+                <i class="fas fa-book-medical"></i>
+                NEET ULTIMATE COMBO
+            </div>
+            <div class="countdown">
+                <i class="fas fa-bolt"></i>
+                <span id="countdown-text">Offer Ends Soon!</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <h1>THE ULTIMATE NEET PREPARATION PACKAGE</h1>
+            <p class="subtitle">Everything you need to crack NEET in one comprehensive combo - Study Materials, Test Series, Modules & More!</p>
+            <div class="offer-badge">LIMITED TIME OFFER - 50% DISCOUNT</div>
+        </div>
+    </section>
+
+    <!-- Timer Section -->
+    <section class="timer-section">
+        <div class="container">
+            <h3><i class="fas fa-clock"></i> HURRY! OFFER ENDS IN:</h3>
+            <div class="timer-container">
+                <div class="timer-box">
+                    <div class="timer-value" id="hours">05</div>
+                    <div class="timer-label">HOURS</div>
+                </div>
+                <div class="timer-box">
+                    <div class="timer-value" id="minutes">23</div>
+                    <div class="timer-label">MINUTES</div>
+                </div>
+                <div class="timer-box">
+                    <div class="timer-value" id="seconds">47</div>
+                    <div class="timer-label">SECONDS</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Product Section -->
+    <section class="product-section">
+        <div class="container">
+            <div class="product-card">
+                <div class="product-image">
+                    <div class="product-image-content">
+                        <h2>NEET ULTIMATE COMBO</h2>
+                        <p>All-in-One Solution for NEET Aspirants</p>
+                    </div>
+                    <div class="product-badge">BEST VALUE</div>
+                </div>
+                <div class="product-content">
+                    <div class="price-container">
+                        <div class="current-price">₹99</div>
+                        <div class="original-price">₹149</div>
+                        <div class="discount-badge">50% OFF</div>
+                    </div>
+                    
+                    <ul class="features-list">
+                        <li><i class="fas fa-check-circle"></i> Complete Study Materials (Physics, Chemistry, Biology)</li>
+                        <li><i class="fas fa-check-circle"></i> 50+ Full-Length Test Series with Solutions</li>
+                        <li><i class="fas fa-check-circle"></i> Allen & Aakash Module Summaries</li>
+                        <li><i class="fas fa-check-circle"></i> DC Pandey & HC Verma Solved Problems</li>
+                        <li><i class="fas fa-check-circle"></i> Chapter-wise Short Notes for Quick Revision</li>
+                        <li><i class="fas fa-check-circle"></i> 10 Years PYQs with Detailed Solutions</li>
+                        <li><i class="fas fa-check-circle"></i> High-Yield Diagrams & Mnemonics</li>
+                    </ul>
+                    
+                    <button class="cta-button" id="buy-button">
+                        <i class="fas fa-bolt"></i> GET INSTANT ACCESS NOW
+                    </button>
+                    
+                    <div class="guarantee-badge">
+                        <i class="fas fa-shield-alt"></i> 7-Day Money Back Guarantee
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Recent Purchases Notification -->
+    <div class="purchases-notification" id="purchases-notification">
+        <h4><i class="fas fa-users"></i> RECENT PURCHASES</h4>
+        <div class="purchase-item">
+            <div class="purchase-avatar">R</div>
+            <div class="purchase-info">
+                <h4>Rahul from Mumbai</h4>
+                <p>Purchased NEET Ultimate Combo</p>
+            </div>
+            <div class="purchase-time">2 mins ago</div>
+        </div>
+        <div class="purchase-item">
+            <div class="purchase-avatar">P</div>
+            <div class="purchase-info">
+                <h4>Priya from Delhi</h4>
+                <p>Purchased NEET Ultimate Combo</p>
+            </div>
+            <div class="purchase-time">5 mins ago</div>
+        </div>
+        <div class="purchase-item">
+            <div class="purchase-avatar">A</div>
+            <div class="purchase-info">
+                <h4>Ananya from Bangalore</h4>
+                <p>Purchased NEET Ultimate Combo</p>
+            </div>
+            <div class="purchase-time">8 mins ago</div>
+        </div>
+    </div>
+
+    <script>
+        // Countdown Timer (3 hours)
+        let hours = 2;
+        let minutes = 59;
+        let seconds = 59;
+        
+        const countdown = setInterval(() => {
+            seconds--;
+            
+            if (seconds < 0) {
+                seconds = 59;
+                minutes--;
+            }
+            
+            if (minutes < 0) {
+                minutes = 59;
+                hours--;
+            }
+            
+            if (hours < 0) {
+                clearInterval(countdown);
+                document.getElementById('countdown-text').textContent = "Offer Expired!";
+                document.getElementById('buy-button').textContent = "OFFER EXPIRED";
+                document.getElementById('buy-button').style.background = "#999";
+                return;
+            }
+            
+            document.getElementById('hours').textContent = hours.toString().padStart(2, '0');
+            document.getElementById('minutes').textContent = minutes.toString().padStart(2, '0');
+            document.getElementById('seconds').textContent = seconds.toString().padStart(2, '0');
+            
+            // Change color when less than 30 minutes
+            if (hours === 0 && minutes < 30) {
+                document.querySelector('.timer-section').style.background = "linear-gradient(135deg, #FF6584, #FF9F1C)";
+                document.getElementById('countdown-text').innerHTML = '<i class="fas fa-exclamation-triangle"></i> LAST CHANCE!';
+            }
+        }, 1000);
+        
+        // Fake purchases notification
+        const names = ["Aarav", "Neha", "Vikram", "Sanya", "Karan", "Ishita", "Rohan", "Meera"];
+        const cities = ["Mumbai", "Delhi", "Bangalore", "Hyderabad", "Chennai", "Kolkata", "Pune", "Ahmedabad"];
+        
+        function showRandomPurchase() {
+            const randomName = names[Math.floor(Math.random() * names.length)];
+            const randomCity = cities[Math.floor(Math.random() * cities.length)];
+            const minutesAgo = Math.floor(Math.random() * 10) + 1;
+            
+            const notification = document.getElementById('purchases-notification');
+            notification.innerHTML = `
+                <h4><i class="fas fa-users"></i> RECENT PURCHASES</h4>
+                <div class="purchase-item">
+                    <div class="purchase-avatar">${randomName.charAt(0)}</div>
+                    <div class="purchase-info">
+                        <h4>${randomName} from ${randomCity}</h4>
+                        <p>Purchased NEET Ultimate Combo</p>
+                    </div>
+                    <div class="purchase-time">${minutesAgo} mins ago</div>
+                </div>
+                ${notification.innerHTML.split('<div class="purchase-item">')[1]}
+                ${notification.innerHTML.split('<div class="purchase-item">')[2]}
+            `;
+            
+            // Show notification
+            notification.style.display = 'block';
+            
+            // Hide after some time
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 5000);
+        }
+        
+        // Show first notification after 3 seconds
+        setTimeout(() => {
+            document.getElementById('purchases-notification').style.transform = 'translateX(0)';
+            
+            // Show random purchases every 8-15 seconds
+            setInterval(showRandomPurchase, Math.random() * 7000 + 8000);
+        }, 3000);
+        
+        // Buy button click
+        document.getElementById('buy-button').addEventListener('click', function() {
+            alert('Redirecting to secure checkout...\n\nNEET Ultimate Combo - ₹99\n\n(This is a demo. On a real site, this would go to payment gateway)');
+        });
+    </script>
+</body>
+</html>
