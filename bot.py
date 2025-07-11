@@ -37,12 +37,12 @@ class Bot(Client):
         logging.info(f"{me.first_name} Pending deletions restored successfully.")
 
         # Notify admins
-        for admin_id in ADMIN_IDS:
+        for admin_id in ADMIN:
             try:
                 await self.send_message(
                     admin_id,
-                    "**Back online, baby 🎀🥹**\n"
-                    "**Don’t even think about using another bot... I'm all yours! 😤❤️**")
+                    "**Missed me ??**\n"
+                    "**I’m baaack online ~ 🎀🌝**")
                 
             except Exception as e:
                 logging.warning(f"Failed to send restart notification to {admin_id}: {e}")
